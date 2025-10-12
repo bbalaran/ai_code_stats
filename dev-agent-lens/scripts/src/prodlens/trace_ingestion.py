@@ -53,7 +53,7 @@ def _sanitize_repo_slug(value: str | None) -> str:
     if ".." in candidate or candidate.startswith("/"):
         raise ValueError(f"Invalid repo slug value: {value}")
 
-    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_/")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_/." )
     if not all(char in allowed for char in candidate):
         raise ValueError(f"Invalid repo slug value: {value}")
 
