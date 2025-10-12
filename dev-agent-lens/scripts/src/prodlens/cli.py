@@ -82,13 +82,13 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
 
     if ns.command == "ingest-traces":
         args = _create_ingest_traces_parser().parse_args(ns.args)
-        store = ProdLensStore(args.db)
-        ingestor = TraceIngestor(
-            store,
-            dead_letter_dir=args.dead_letter_dir,
-            parquet_dir=args.parquet_dir,
-        )
-        inserted = ingestor.ingest_file(args.input, repo_slug=args.repo)
+        with ProdLensStore(args.db) as store:
+            ingestor = TraceIngestor(
+                store,
+                dead_letter_dir=args.dead_letter_dir,
+                parquet_dir=args.parquet_dir,
+            )
+            inserted = ingestor.ingest_file(args.input, repo_slug=args.repo)
         print(f"✅ Ingested {inserted} trace records into {args.db}")
         return
 
@@ -103,10 +103,10 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         since = _parse_date(args.since) if args.since else None
         since_dt = dt.datetime.combine(since, dt.time.min, tzinfo=dt.timezone.utc) if since else None
 
-        store = ProdLensStore(args.db)
-        etl = GithubETL(store)
-        inserted_prs = etl.sync_pull_requests(owner, repo, token=token, since=since_dt)
-        inserted_commits = etl.sync_commits(owner, repo, token=token, since=since_dt)
+        with ProdLensStore(args.db) as store:
+            etl = GithubETL(store)
+            inserted_prs = etl.sync_pull_requests(owner, repo, token=token, since=since_dt)
+            inserted_commits = etl.sync_commits(owner, repo, token=token, since=since_dt)
         print(f"✅ Synced {inserted_prs} pull requests and {inserted_commits} commits into {args.db}")
         return
 
@@ -115,14 +115,14 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         since = _parse_date(args.since)
         policy_models: Set[str] | None = set(args.policy_models) if args.policy_models else None
 
-        store = ProdLensStore(args.db)
-        generator = ReportGenerator(store)
-        report = generator.generate_report(
-            repo=args.repo,
-            since=since,
-            lag_days=args.lag_days,
-            policy_models=policy_models,
-        )
+        with ProdLensStore(args.db) as store:
+            generator = ReportGenerator(store)
+            report = generator.generate_report(
+                repo=args.repo,
+                since=since,
+                lag_days=args.lag_days,
+                policy_models=policy_models,
+            )
         report["metadata"]["runtime_profile"] = detect_runtime_profile()
         print_json(report)
         if args.output:

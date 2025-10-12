@@ -7,6 +7,11 @@ from typing import Iterable, List, Mapping
 
 import pandas as pd
 
+try:  # pragma: no cover - platform-specific
+    import fcntl  # type: ignore
+except ImportError:  # pragma: no cover - Windows compatibility
+    fcntl = None  # type: ignore
+
 from .storage import ProdLensStore
 from .trace_normalizer import normalize_records
 
@@ -142,15 +147,21 @@ class TraceIngestor:
             repo_dir = self.parquet_dir / safe_repo
             repo_dir.mkdir(parents=True, exist_ok=True)
             parquet_path = repo_dir / f"{event_date}.parquet"
-            if parquet_path.exists():
-                existing = pd.read_parquet(parquet_path)
-                combined = pd.concat([existing, group], ignore_index=True)
-                combined = combined.drop_duplicates(
-                    subset=["session_id", "timestamp", "model"], keep="last"
-                )
-            else:
-                combined = group
-            combined.to_parquet(parquet_path, index=False)
+            lock_path = parquet_path.with_suffix(".lock")
+
+            with lock_path.open("w") as lock_handle:
+                if hasattr(fcntl, "flock"):
+                    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+
+                if parquet_path.exists():
+                    existing = pd.read_parquet(parquet_path)
+                    combined = pd.concat([existing, group], ignore_index=True)
+                    combined = combined.drop_duplicates(
+                        subset=["session_id", "timestamp", "model"], keep="last"
+                    )
+                else:
+                    combined = group
+                combined.to_parquet(parquet_path, index=False)
 
     def _write_dead_letters(self, source_path: Path, invalid_lines: Iterable[str]) -> None:
         filename = source_path.with_suffix("").name + ".deadletter.jsonl"
