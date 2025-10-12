@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
+import socket
 from pathlib import Path
-from typing import Iterable, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set
 
 from .github_etl import GithubETL
 from .metrics import ReportGenerator
@@ -29,6 +31,19 @@ def _create_ingest_traces_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="prod-lens ingest-traces")
     parser.add_argument("input", type=Path, help="Path to LiteLLM trace JSONL file")
     parser.add_argument("--db", type=Path, default=Path(".prod-lens/cache.db"), help="Path to ProdLens SQLite cache")
+    parser.add_argument("--repo", help="Repository slug (owner/name) applied to normalized records")
+    parser.add_argument(
+        "--dead-letter-dir",
+        type=Path,
+        default=Path(".prod-lens/dead-letter"),
+        help="Directory for invalid payloads",
+    )
+    parser.add_argument(
+        "--parquet-dir",
+        type=Path,
+        default=Path(".prod-lens/parquet"),
+        help="Directory for parquet cache output",
+    )
     return parser
 
 
@@ -53,6 +68,11 @@ def _create_report_parser() -> argparse.ArgumentParser:
         dest="policy_models",
         help="Model allowed by internal policy (repeatable)",
     )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional CSV filepath for flattened metric output",
+    )
     return parser
 
 
@@ -63,8 +83,12 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     if ns.command == "ingest-traces":
         args = _create_ingest_traces_parser().parse_args(ns.args)
         store = ProdLensStore(args.db)
-        ingestor = TraceIngestor(store)
-        inserted = ingestor.ingest_file(args.input)
+        ingestor = TraceIngestor(
+            store,
+            dead_letter_dir=args.dead_letter_dir,
+            parquet_dir=args.parquet_dir,
+        )
+        inserted = ingestor.ingest_file(args.input, repo_slug=args.repo)
         print(f"✅ Ingested {inserted} trace records into {args.db}")
         return
 
@@ -99,13 +123,61 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             lag_days=args.lag_days,
             policy_models=policy_models,
         )
+        report["metadata"]["runtime_profile"] = detect_runtime_profile()
         print_json(report)
+        if args.output:
+            rows = flatten_report(report)
+            write_csv(args.output, rows)
+            print(f"[INFO] Wrote CSV metrics to {args.output}")
         return
 
     parser.print_help()
 
 
 def print_json(payload: dict) -> None:
-    import json
-
     print(json.dumps(payload, indent=2, default=str))
+
+
+def detect_runtime_profile() -> Optional[str]:
+    profiles = []
+    if _port_is_open(4000):
+        profiles.append("litellm-proxy")
+    if _port_is_open(6006):
+        profiles.append("phoenix-dashboard")
+    if _port_is_open(8080):
+        profiles.append("arize-exporter")
+    return ", ".join(profiles) if profiles else None
+
+
+def _port_is_open(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex(("localhost", port)) == 0
+
+
+def flatten_report(report: Dict[str, object]) -> List[Dict[str, object]]:
+    rows: List[Dict[str, object]] = []
+
+    def _walk(prefix: str, value: object) -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                key_prefix = f"{prefix}.{key}" if prefix else key
+                _walk(key_prefix, nested)
+        elif isinstance(value, list):
+            rows.append({"metric": prefix, "value": json.dumps(value, default=str)})
+        else:
+            rows.append({"metric": prefix, "value": value})
+
+    _walk("", report)
+    return rows
+
+
+def write_csv(path: Path, rows: List[Dict[str, object]]) -> None:
+    import csv
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["metric", "value"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)

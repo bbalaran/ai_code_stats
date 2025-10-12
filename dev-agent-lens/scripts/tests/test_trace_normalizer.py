@@ -52,3 +52,16 @@ def test_normalize_records_handles_multiple_formats():
     assert normalized[1].status_code == 429
     assert normalized[1].accepted_flag is False
     assert normalized[1].timestamp == dt.datetime(2024, 1, 2, 13, 0, tzinfo=dt.timezone.utc)
+
+
+def test_normalizer_preserves_session_ids_with_multiple_underscores():
+    record = {
+        "timestamp": "2024-01-01T00:00:00Z",
+        "usage": {"total_tokens": 10},
+        "metadata": {"session_id": "session_alpha_beta"},
+        "attributes": {},
+    }
+
+    normalized = normalize_records([record])
+
+    assert normalized[0].session_id == "alpha_beta"

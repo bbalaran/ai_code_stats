@@ -40,6 +40,12 @@ class ProdLensStore:
                     latency_ms REAL NOT NULL,
                     status_code INTEGER,
                     accepted_flag INTEGER NOT NULL,
+                    repo_slug TEXT,
+                    event_date TEXT,
+                    total_tokens INTEGER NOT NULL DEFAULT 0,
+                    cost_usd REAL NOT NULL DEFAULT 0,
+                    diff_ratio REAL,
+                    accepted_lines INTEGER,
                     trace_hash TEXT UNIQUE
                 );
 
@@ -81,13 +87,37 @@ class ProdLensStore:
 
             cur = self.conn.execute("PRAGMA table_info(sessions)")
             columns = {row[1] for row in cur.fetchall()}
+            migrations: List[str] = []
             if "trace_hash" not in columns:
-                self.conn.execute("ALTER TABLE sessions ADD COLUMN trace_hash TEXT")
+                migrations.append("ALTER TABLE sessions ADD COLUMN trace_hash TEXT")
+            if "repo_slug" not in columns:
+                migrations.append("ALTER TABLE sessions ADD COLUMN repo_slug TEXT")
+            if "event_date" not in columns:
+                migrations.append("ALTER TABLE sessions ADD COLUMN event_date TEXT")
+            if "total_tokens" not in columns:
+                migrations.append("ALTER TABLE sessions ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0")
+            if "cost_usd" not in columns:
+                migrations.append("ALTER TABLE sessions ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0")
+            if "diff_ratio" not in columns:
+                migrations.append("ALTER TABLE sessions ADD COLUMN diff_ratio REAL")
+            if "accepted_lines" not in columns:
+                migrations.append("ALTER TABLE sessions ADD COLUMN accepted_lines INTEGER")
+
+            for statement in migrations:
+                self.conn.execute(statement)
+
+            if migrations:
                 rows = self.conn.execute(
-                    "SELECT id, session_id, developer_id, timestamp, model, tokens_in, tokens_out, latency_ms, status_code, accepted_flag FROM sessions"
+                    "SELECT id, session_id, developer_id, timestamp, model, tokens_in, tokens_out, latency_ms, status_code, accepted_flag, repo_slug, event_date, total_tokens, cost_usd, diff_ratio, accepted_lines FROM sessions"
                 ).fetchall()
                 for row in rows:
                     record = dict(row)
+                    if not record.get("event_date"):
+                        record["event_date"] = self._derive_event_date(record)
+                    if not record.get("total_tokens"):
+                        record["total_tokens"] = int(record.get("tokens_in", 0)) + int(record.get("tokens_out", 0))
+                    if record.get("cost_usd") is None:
+                        record["cost_usd"] = 0.0
                     record["trace_hash"] = self._compute_trace_hash(record)
                     self.conn.execute(
                         "UPDATE sessions SET trace_hash = :trace_hash WHERE id = :id",
@@ -96,10 +126,26 @@ class ProdLensStore:
                 self.conn.execute(
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_trace_hash ON sessions(trace_hash)"
                 )
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_repo_date ON sessions(repo_slug, event_date)"
+            )
 
     # ------------------------------------------------------------------
     # Session operations
     # ------------------------------------------------------------------
+    @staticmethod
+    def _derive_event_date(record: Mapping[str, object]) -> str:
+        timestamp = record.get("timestamp")
+        if isinstance(timestamp, dt.datetime):
+            return timestamp.astimezone(dt.timezone.utc).date().isoformat()
+        try:
+            parsed = dt.datetime.fromisoformat(str(timestamp))
+        except (TypeError, ValueError):
+            return dt.datetime.now(tz=dt.timezone.utc).date().isoformat()
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        return parsed.astimezone(dt.timezone.utc).date().isoformat()
+
     @staticmethod
     def _compute_trace_hash(record: Mapping[str, object]) -> str:
         payload = {
@@ -112,6 +158,8 @@ class ProdLensStore:
             "latency_ms": float(record.get("latency_ms", 0.0)),
             "status_code": record.get("status_code"),
             "accepted_flag": 1 if record.get("accepted_flag") else 0,
+            "repo_slug": record.get("repo_slug"),
+            "event_date": record.get("event_date") or ProdLensStore._derive_event_date(record),
         }
         encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
         return hashlib.sha1(encoded).hexdigest()
@@ -133,6 +181,12 @@ class ProdLensStore:
             record["accepted_flag"] = 1 if record.get("accepted_flag") else 0
             record.setdefault("tokens_out", 0)
             record.setdefault("tokens_in", 0)
+            record.setdefault("repo_slug", None)
+            record.setdefault("event_date", self._derive_event_date(record))
+            record["total_tokens"] = int(record.get("total_tokens") or (int(record.get("tokens_in", 0)) + int(record.get("tokens_out", 0))))
+            record["cost_usd"] = float(record.get("cost_usd") or 0.0)
+            record.setdefault("diff_ratio", None)
+            record.setdefault("accepted_lines", None)
 
             record["trace_hash"] = self._compute_trace_hash(record)
 
@@ -146,10 +200,12 @@ class ProdLensStore:
                 """
                 INSERT INTO sessions (
                     session_id, developer_id, timestamp, model,
-                    tokens_in, tokens_out, latency_ms, status_code, accepted_flag, trace_hash
+                    tokens_in, tokens_out, latency_ms, status_code, accepted_flag,
+                    repo_slug, event_date, total_tokens, cost_usd, diff_ratio, accepted_lines, trace_hash
                 ) VALUES (
                     :session_id, :developer_id, :timestamp, :model,
-                    :tokens_in, :tokens_out, :latency_ms, :status_code, :accepted_flag, :trace_hash
+                    :tokens_in, :tokens_out, :latency_ms, :status_code, :accepted_flag,
+                    :repo_slug, :event_date, :total_tokens, :cost_usd, :diff_ratio, :accepted_lines, :trace_hash
                 )
                 ON CONFLICT(trace_hash)
                 DO UPDATE SET
@@ -159,7 +215,13 @@ class ProdLensStore:
                     tokens_out=excluded.tokens_out,
                     latency_ms=excluded.latency_ms,
                     status_code=excluded.status_code,
-                    accepted_flag=excluded.accepted_flag
+                    accepted_flag=excluded.accepted_flag,
+                    repo_slug=excluded.repo_slug,
+                    event_date=excluded.event_date,
+                    total_tokens=excluded.total_tokens,
+                    cost_usd=excluded.cost_usd,
+                    diff_ratio=excluded.diff_ratio,
+                    accepted_lines=excluded.accepted_lines
                 """,
                 rows,
             )
@@ -167,13 +229,13 @@ class ProdLensStore:
 
     def fetch_sessions(self) -> List[sqlite3.Row]:
         cur = self.conn.execute(
-            "SELECT session_id, developer_id, timestamp, model, tokens_in, tokens_out, latency_ms, status_code, accepted_flag FROM sessions"
+            "SELECT session_id, developer_id, timestamp, model, tokens_in, tokens_out, latency_ms, status_code, accepted_flag, repo_slug, event_date, total_tokens, cost_usd, diff_ratio, accepted_lines FROM sessions"
         )
         return cur.fetchall()
 
     def sessions_dataframe(self) -> pd.DataFrame:
         return pd.read_sql_query(
-            "SELECT session_id, developer_id, timestamp, model, tokens_in, tokens_out, latency_ms, status_code, accepted_flag FROM sessions",
+            "SELECT session_id, developer_id, timestamp, model, tokens_in, tokens_out, latency_ms, status_code, accepted_flag, repo_slug, event_date, total_tokens, cost_usd, diff_ratio, accepted_lines FROM sessions",
             self.conn,
             parse_dates=["timestamp"],
         )

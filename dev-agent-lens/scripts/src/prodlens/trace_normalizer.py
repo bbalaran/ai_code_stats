@@ -7,7 +7,7 @@ from typing import Iterable, List, Mapping, Optional
 
 from .schemas import CanonicalTrace
 
-_SESSION_PATTERN = re.compile(r"session[_-]([a-zA-Z0-9-]+)")
+_SESSION_PATTERN = re.compile(r"session[_-]([a-zA-Z0-9_-]+)")
 
 
 def _ensure_datetime(value: Optional[str]) -> dt.datetime:
@@ -78,6 +78,9 @@ def _extract_session_id(metadata: Mapping[str, object]) -> Optional[str]:
         if match:
             return match.group(1)
 
+    if possible_values:
+        return possible_values[0]
+
     return None
 
 
@@ -134,6 +137,41 @@ def _extract_accept_flag(attributes: Mapping[str, object]) -> bool:
     return False
 
 
+def _extract_repo_slug(metadata: Mapping[str, object], attributes: Mapping[str, object]) -> Optional[str]:
+    for key in ("repo", "repository", "repo_slug"):
+        value = metadata.get(key)
+        if value:
+            return str(value)
+    repo_attr = attributes.get("repo") or attributes.get("repository")
+    if repo_attr:
+        return str(repo_attr)
+    return None
+
+
+def _extract_diff_ratio(attributes: Mapping[str, object]) -> Optional[float]:
+    for key in ("diff_ratio", "prod_lens.diff_ratio", "analysis.diff_ratio"):
+        value = attributes.get(key)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _extract_accepted_lines(attributes: Mapping[str, object]) -> Optional[int]:
+    for key in ("accepted_lines", "prod_lens.accepted_lines", "analysis.accepted_lines"):
+        value = attributes.get(key)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def normalize_records(records: Iterable[Mapping[str, object]]) -> List[CanonicalTrace]:
     """Normalize raw trace payloads into canonical ProdLens records."""
 
@@ -182,6 +220,9 @@ def normalize_records(records: Iterable[Mapping[str, object]]) -> List[Canonical
                 latency_ms=float(latency),
                 status_code=status,
                 accepted_flag=accepted,
+                repo_slug=_extract_repo_slug(metadata, attributes),
+                diff_ratio=_extract_diff_ratio(attributes),
+                accepted_lines=_extract_accepted_lines(attributes),
             )
         )
 
