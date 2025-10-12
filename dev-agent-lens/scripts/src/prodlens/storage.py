@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 import sqlite3
 from pathlib import Path
 from typing import Iterable, List, Mapping, Optional
@@ -38,7 +40,7 @@ class ProdLensStore:
                     latency_ms REAL NOT NULL,
                     status_code INTEGER,
                     accepted_flag INTEGER NOT NULL,
-                    UNIQUE(session_id, timestamp)
+                    trace_hash TEXT UNIQUE
                 );
 
                 CREATE TABLE IF NOT EXISTS pull_requests (
@@ -77,9 +79,43 @@ class ProdLensStore:
                 """
             )
 
+            cur = self.conn.execute("PRAGMA table_info(sessions)")
+            columns = {row[1] for row in cur.fetchall()}
+            if "trace_hash" not in columns:
+                self.conn.execute("ALTER TABLE sessions ADD COLUMN trace_hash TEXT")
+                rows = self.conn.execute(
+                    "SELECT id, session_id, developer_id, timestamp, model, tokens_in, tokens_out, latency_ms, status_code, accepted_flag FROM sessions"
+                ).fetchall()
+                for row in rows:
+                    record = dict(row)
+                    record["trace_hash"] = self._compute_trace_hash(record)
+                    self.conn.execute(
+                        "UPDATE sessions SET trace_hash = :trace_hash WHERE id = :id",
+                        {"trace_hash": record["trace_hash"], "id": record["id"]},
+                    )
+                self.conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_trace_hash ON sessions(trace_hash)"
+                )
+
     # ------------------------------------------------------------------
     # Session operations
     # ------------------------------------------------------------------
+    @staticmethod
+    def _compute_trace_hash(record: Mapping[str, object]) -> str:
+        payload = {
+            "session_id": record.get("session_id"),
+            "developer_id": record.get("developer_id"),
+            "timestamp": record.get("timestamp"),
+            "model": record.get("model"),
+            "tokens_in": int(record.get("tokens_in", 0)),
+            "tokens_out": int(record.get("tokens_out", 0)),
+            "latency_ms": float(record.get("latency_ms", 0.0)),
+            "status_code": record.get("status_code"),
+            "accepted_flag": 1 if record.get("accepted_flag") else 0,
+        }
+        encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        return hashlib.sha1(encoded).hexdigest()
+
     def insert_sessions(self, sessions: Iterable[CanonicalTrace | Mapping[str, object]]) -> int:
         rows: List[dict] = []
         for session in sessions:
@@ -98,6 +134,8 @@ class ProdLensStore:
             record.setdefault("tokens_out", 0)
             record.setdefault("tokens_in", 0)
 
+            record["trace_hash"] = self._compute_trace_hash(record)
+
             rows.append(record)
 
         if not rows:
@@ -108,12 +146,12 @@ class ProdLensStore:
                 """
                 INSERT INTO sessions (
                     session_id, developer_id, timestamp, model,
-                    tokens_in, tokens_out, latency_ms, status_code, accepted_flag
+                    tokens_in, tokens_out, latency_ms, status_code, accepted_flag, trace_hash
                 ) VALUES (
                     :session_id, :developer_id, :timestamp, :model,
-                    :tokens_in, :tokens_out, :latency_ms, :status_code, :accepted_flag
+                    :tokens_in, :tokens_out, :latency_ms, :status_code, :accepted_flag, :trace_hash
                 )
-                ON CONFLICT(session_id, timestamp)
+                ON CONFLICT(trace_hash)
                 DO UPDATE SET
                     developer_id=excluded.developer_id,
                     model=excluded.model,

@@ -15,5 +15,9 @@ dependencies = [
     "opentelemetry-semantic-conventions>=0.42b0",
     "requests>=2.31.0",
     "scipy>=1.11.0",
+]
+
+[project.optional-dependencies]
+test = [
     "pytest>=7.0.0",
 ]

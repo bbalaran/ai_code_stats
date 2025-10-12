@@ -46,7 +46,7 @@ def test_normalize_records_handles_multiple_formats():
 
     assert normalized[1].session_id == "beta"
     assert normalized[1].developer_id is None
-    assert normalized[1].tokens_in == 50  # falls back to total tokens when split absent
+    assert normalized[1].tokens_in == 50  # falls back to total tokens when splits absent
     assert normalized[1].tokens_out == 0
     assert normalized[1].latency_ms == 900
     assert normalized[1].status_code == 429

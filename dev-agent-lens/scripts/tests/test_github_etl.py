@@ -11,6 +11,7 @@ class FakeResponse:
         self.status_code = status_code
         self._json = json_data or []
         self.headers = headers or {}
+        self.text = ""
 
     def json(self):
         return self._json
@@ -108,3 +109,94 @@ def test_github_etl_classifies_reopened(status_code, tmp_path: Path):
 
     rows = store.fetch_pull_requests()
     assert rows[0]["reopened"] is True
+
+
+def test_github_etl_paginates_pull_requests(tmp_path: Path):
+    store = ProdLensStore(tmp_path / "cache.db")
+    responses = [
+        FakeResponse(
+            200,
+            json_data=[
+                {
+                    "id": 11,
+                    "number": 11,
+                    "state": "closed",
+                    "merged_at": "2024-01-02T10:00:00Z",
+                    "created_at": "2024-01-01T09:30:00Z",
+                    "updated_at": "2024-01-02T10:00:00Z",
+                    "user": {"login": "dev-1"},
+                    "title": "Add feature",
+                }
+            ],
+            headers={
+                "ETag": "etag-pr",
+                "Link": '<https://api.github.com/repos/openai/dev-agent-lens/pulls?page=2>; rel="next"',
+            },
+        ),
+        FakeResponse(
+            200,
+            json_data=[
+                {
+                    "id": 12,
+                    "number": 12,
+                    "state": "closed",
+                    "merged_at": "2024-01-03T10:00:00Z",
+                    "created_at": "2024-01-02T09:30:00Z",
+                    "updated_at": "2024-01-03T10:00:00Z",
+                    "user": {"login": "dev-2"},
+                    "title": "Add more",
+                }
+            ],
+        ),
+    ]
+    session = FakeSession(responses)
+    etl = GithubETL(store, session=session)
+
+    inserted = etl.sync_pull_requests("openai", "dev-agent-lens")
+
+    assert inserted == 2
+    assert len(store.fetch_pull_requests()) == 2
+    assert session.calls[0]["params"]["page"] == 1
+    assert session.calls[1]["params"]["page"] == 2
+    assert "If-None-Match" not in session.calls[0]["headers"]
+    assert "If-None-Match" not in session.calls[1]["headers"]
+
+
+def test_github_etl_paginates_commits(tmp_path: Path):
+    store = ProdLensStore(tmp_path / "cache.db")
+    responses = [
+        FakeResponse(
+            200,
+            json_data=[
+                {
+                    "sha": "abc",
+                    "commit": {"author": {"name": "dev-1", "date": "2024-01-01T00:00:00Z"}},
+                }
+            ],
+            headers={
+                "ETag": "etag-commit",
+                "Link": '<https://api.github.com/repos/openai/dev-agent-lens/commits?page=2>; rel="next"',
+            },
+        ),
+        FakeResponse(
+            200,
+            json_data=[
+                {
+                    "sha": "def",
+                    "commit": {"author": {"name": "dev-2", "date": "2024-01-02T00:00:00Z"}},
+                }
+            ],
+        ),
+    ]
+    session = FakeSession(responses)
+    etl = GithubETL(store, session=session)
+
+    inserted = etl.sync_commits("openai", "dev-agent-lens")
+
+    assert inserted == 2
+    commits = store.fetch_commits()
+    assert {row["sha"] for row in commits} == {"abc", "def"}
+    assert session.calls[0]["params"]["page"] == 1
+    assert session.calls[1]["params"]["page"] == 2
+    assert "If-None-Match" not in session.calls[0]["headers"]
+    assert "If-None-Match" not in session.calls[1]["headers"]

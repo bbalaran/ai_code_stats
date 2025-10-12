@@ -73,6 +73,8 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         token = args.token or os.getenv("GITHUB_TOKEN")
         if not token:
             raise SystemExit("❌ GitHub token is required via --token or GITHUB_TOKEN")
+        if "/" not in args.repo:
+            raise SystemExit("❌ Repository must be in the format owner/name")
         owner, repo = args.repo.split("/", maxsplit=1)
         since = _parse_date(args.since) if args.since else None
         since_dt = dt.datetime.combine(since, dt.time.min, tzinfo=dt.timezone.utc) if since else None

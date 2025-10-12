@@ -23,7 +23,10 @@ def _ensure_datetime(value: Optional[str]) -> dt.datetime:
     value = str(value)
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
-    return dt.datetime.fromisoformat(value).astimezone(dt.timezone.utc)
+    parsed = dt.datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
 
 
 def _extract_metadata(record: Mapping[str, object]) -> Mapping[str, object]:
@@ -159,7 +162,7 @@ def normalize_records(records: Iterable[Mapping[str, object]]) -> List[Canonical
             input_tokens = 0
 
         if output_tokens is None:
-            # When only total tokens are present, attribute them to input tokens
+            # When only total tokens are present, derive output tokens from the remainder
             output_tokens = max(int(total_tokens or 0) - int(input_tokens), 0)
 
         timestamp = _ensure_datetime(record.get("timestamp") or record.get("start_time"))

@@ -66,7 +66,7 @@ def main():
     )
 
     # ProdLens subcommand
-    prodlens_parser = subparsers.add_parser(
+    subparsers.add_parser(
         'prod-lens',
         help='ProdLens pilot ingestion and reporting tools'
     )
