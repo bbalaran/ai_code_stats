@@ -65,6 +65,12 @@ def main():
         help='Compare spans to identify duplication and accumulation patterns'
     )
 
+    # ProdLens subcommand
+    prodlens_parser = subparsers.add_parser(
+        'prod-lens',
+        help='ProdLens pilot ingestion and reporting tools'
+    )
+
     # Parse just the command
     if len(sys.argv) == 1:
         parser.print_help()
@@ -92,6 +98,11 @@ def main():
         from src.compare_spans import main as compare_main
         sys.argv = [sys.argv[0]] + remaining
         compare_main()
+
+    elif args.command == 'prod-lens':
+        from src.prodlens.cli import main as prodlens_main
+        sys.argv = [sys.argv[0]] + remaining
+        prodlens_main()
 
     else:
         parser.print_help()
