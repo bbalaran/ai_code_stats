@@ -1,0 +1,45 @@
+{
+	"name": "lemmy-monorepo",
+	"version": "0.1.0",
+	"description": "TypeScript API wrapper for multiple LLM providers",
+	"type": "module",
+	"private": true,
+	"workspaces": [
+		"packages/lemmy",
+		"packages/lemmy-tui",
+		"packages/lemmy-cli-args",
+		"apps/*",
+		"apps/claude-trace/frontend"
+	],
+	"scripts": {
+		"dev": "npm run build --workspace=packages/lemmy --workspace=packages/lemmy-tui && concurrently --kill-others-on-fail --prefix-colors \"cyan,magenta,yellow,green,blue\" --prefix \"[{name}]\" --names \"lemmy,tui,chat,red-team,bridge\" \"cd packages/lemmy && tsc --watch --pretty\" \"cd packages/lemmy-tui && tsc --watch --pretty\" \"cd apps/lemmy-chat && tsc --watch --pretty\" \"cd apps/red-teaming && tsc --watch --pretty\" \"cd apps/claude-bridge && tsc --watch --pretty\"",
+		"build": "npm run build --workspaces --if-present",
+		"clean": "npm run clean --workspaces --if-present",
+		"typecheck": "npm run typecheck --workspaces --if-present",
+		"test": "npm run test --workspaces --if-present",
+		"test:run": "npm run test:run --workspaces --if-present",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"version:patch": "npm version patch --workspaces && git add . && git commit -m 'Bump versions'",
+		"version:minor": "npm version minor --workspaces && git add . && git commit -m 'Bump versions'",
+		"version:major": "npm version major --workspaces && git add . && git commit -m 'Bump versions'",
+		"publish": "npm run build && npm publish --workspaces --access public",
+		"prepare": "husky"
+	},
+	"devDependencies": {
+		"concurrently": "^9.1.0",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.0.0",
+		"live-server": "^1.2.2",
+		"prettier": "^3.5.3",
+		"typescript": "^5.8.3"
+	},
+	"lint-staged": {
+		"*.{ts,js,json,md,yml,yaml}": [
+			"prettier --write"
+		]
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	}
+}

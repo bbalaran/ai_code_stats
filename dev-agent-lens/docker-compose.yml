@@ -1,0 +1,174 @@
+# Choose your observability backend:
+# Arize AX: `docker compose --profile arize up`
+# Phoenix: `docker compose --profile phoenix up`
+# Advanced: Full features with PostgreSQL `docker compose --profile advanced up`
+services:
+  # Arize AX LiteLLM proxy (use with --profile arize)
+  litellm-proxy:
+    image: aowen14/litellm-oauth-fix:latest
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config_arize.yaml:/app/config.yaml
+    environment:
+      # ANTHROPIC_API_KEY - Available as fallback for non-OAuth requests
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Disable authentication for simple setup (no master key)
+      - LITELLM_DISABLE_AUTH=true
+
+      # Enable debug logging for OAuth testing
+      - LITELLM_LOG=DEBUG
+
+      # Required Arize observability
+      - ARIZE_API_KEY=${ARIZE_API_KEY}
+      - ARIZE_SPACE_KEY=${ARIZE_SPACE_KEY}
+
+      # Optional but recommended – explicit endpoint
+      - ARIZE_ENDPOINT=https://otlp.arize.com/v1
+
+      # Give the resource a name so you can filter by service
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-dev-agent-lens}
+    env_file:
+      - .env
+    command:
+      ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - arize
+
+  # Phoenix-based LiteLLM proxy (use with --profile phoenix)
+  litellm-proxy-phoenix:
+    image: aowen14/litellm-oauth-fix:latest
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config_phoenix.yaml:/app/config.yaml
+    environment:
+      # Anthropic + runtime
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # OTEL service name for Phoenix tracing
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-dev-agent-lens}
+
+      # Phoenix OTLP endpoint
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - PHOENIX_COLLECTOR_ENDPOINT=http://phoenix:4317
+
+      # Give the resource a name so you can filter by service
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=${OTEL_SERVICE_NAME:-dev-agent-lens},openinference.project.name=${OTEL_SERVICE_NAME:-dev-agent-lens}
+    env_file:
+      - .env
+    command:
+      ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - phoenix
+    profiles:
+      - phoenix
+
+  # Phoenix observability server (use with --profile phoenix)
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006" # Phoenix UI
+      - "4317:4317" # OTLP gRPC endpoint
+    environment:
+      - PHOENIX_PORT=6006
+      - PHOENIX_HOST=0.0.0.0
+    volumes:
+      - phoenix_data:/mnt/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6006"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - phoenix
+
+  # Advanced features (PostgreSQL Database and Web UI)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=litellm
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-litellm123}
+      - POSTGRES_DB=litellm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - advanced
+
+  # Advanced proxy with database and authentication
+  # With the new OAuth Passthrough changes, this isn't officially supported  at the moment, but feel free to try!
+  # You will need to swap out your Anthropic API key in API-key based requests for your LiteLLM Master key.
+  litellm-proxy-advanced:
+    image: ghcr.io/berriai/litellm:main-latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4001:4000" # Different port to avoid conflict
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml
+    environment:
+      # ANTHROPIC_API_KEY - Available as fallback for non-OAuth requests
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # LiteLLM configuration (required for advanced features)
+
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD:-litellm123}@postgres:5432/litellm
+      - STORE_MODEL_IN_DB=true
+
+      # Optional UI authentication
+      - UI_USERNAME=${UI_USERNAME:-}
+      - UI_PASSWORD=${UI_PASSWORD:-}
+
+      # Required Arize observability
+      - ARIZE_API_KEY=${ARIZE_API_KEY}
+      - ARIZE_SPACE_KEY=${ARIZE_SPACE_KEY}
+
+      # "Project" info that shows up in the Arize UI
+      - ARIZE_MODEL_ID=${ARIZE_MODEL_ID:-dev-agent-lens}
+      - ARIZE_MODEL_VERSION=${ARIZE_MODEL_VERSION:-local-dev}
+
+      # Optional but recommended – explicit endpoint
+      - ARIZE_ENDPOINT=https://otlp.arize.com/v1
+
+      # Give the resource a name so you can filter by service
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=dev-agent-lens-advanced
+    env_file:
+      - .env
+    command:
+      ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - advanced
+
+volumes:
+  postgres_data:
+  phoenix_data:

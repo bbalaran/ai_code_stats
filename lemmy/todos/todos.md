@@ -1,0 +1,1 @@
+- apps/claude-bridge it would be nice to emulate the SSE Anthropic's SDK returns including token counts, so we get token counts displayed by Claude Code

@@ -1,0 +1,52 @@
+{
+	"name": "@mariozechner/lemmy-tui",
+	"version": "0.1.1",
+	"description": "Terminal User Interface library with differential rendering for efficient text-based applications",
+	"type": "module",
+	"main": "./dist/src/index.js",
+	"types": "./dist/src/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/src/index.d.ts",
+			"import": "./dist/src/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"dev": "tsc --watch --pretty",
+		"build": "tsc",
+		"clean": "rm -rf dist",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest",
+		"test:run": "vitest run",
+		"test:coverage": "vitest run --coverage"
+	},
+	"dependencies": {
+		"@types/mime-types": "^2.1.4",
+		"chalk": "^5.4.1",
+		"marked": "^15.0.12",
+		"mime-types": "^3.0.1"
+	},
+	"devDependencies": {
+		"@types/node": "^20.0.0",
+		"typescript": "^5.8.3",
+		"vitest": "^3.1.4"
+	},
+	"keywords": [
+		"tui",
+		"terminal",
+		"ui",
+		"text-editor",
+		"differential-rendering",
+		"typescript",
+		"cli"
+	],
+	"author": "Claude Code",
+	"license": "MIT",
+	"engines": {
+		"node": ">=18.0.0"
+	}
+}
