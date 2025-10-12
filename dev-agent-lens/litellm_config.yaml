@@ -1,0 +1,25 @@
+model_list:
+  - model_name: "anthropic/*"
+    litellm_params:
+      model: "anthropic/*"
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+litellm_settings:
+  drop_params: false
+  pass_through_params: true
+  set_verbose: true
+  disable_auth: false
+  callbacks: ["litellm_trace_logger.trace_logger"]
+  json_logs: true
+
+router_settings:
+  routing_strategy: "simple-shuffle"
+  enable_pre_call_checks: false
+  disable_cooldowns: true
+  allowed_fails: 1000
+
+environment:
+  - DATABASE_URL=${DATABASE_URL}
+  - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
+  - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+  - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
