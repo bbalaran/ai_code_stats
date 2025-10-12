@@ -34,6 +34,10 @@ echo ""
 unset DATABASE_URL
 unset STORE_MODEL_IN_DB
 
+# Set log directory for custom callback
+export LITELLM_LOG_DIR="$LOG_DIR"
+export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+
 exec litellm \
     --config "$CONFIG_FILE" \
     --port 4000 \

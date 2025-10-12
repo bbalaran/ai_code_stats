@@ -1,3 +1,5 @@
 #!/bin/bash
 # Convenience wrapper for prod-lens CLI from project root
-exec python3 -m dev-agent-lens.scripts.src.prodlens.cli "$@"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export PYTHONPATH="$SCRIPT_DIR/dev-agent-lens/scripts/src:$PYTHONPATH"
+exec python3 -m prodlens.cli "$@"

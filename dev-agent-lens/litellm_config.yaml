@@ -9,7 +9,8 @@ litellm_settings:
   pass_through_params: true
   set_verbose: true
   disable_auth: false
-  callbacks: []
+  callbacks: ["litellm_trace_logger.trace_logger"]
+  json_logs: true
 
 router_settings:
   routing_strategy: "simple-shuffle"
