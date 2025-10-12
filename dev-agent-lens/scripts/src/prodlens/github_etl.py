@@ -130,7 +130,9 @@ class GithubETL:
                 merged_at = _parse_datetime(item.get("merged_at"))
                 created_at = _parse_datetime(item.get("created_at"))
                 updated_at = _parse_datetime(item.get("updated_at"))
-                reopened = bool(item.get("reopened_at"))
+                reopened = False
+                if merged_at:
+                    reopened = self._was_reopened(owner, repo, item.get("number"), token=token)
                 rows.append(
                     {
                         "id": item.get("id"),
@@ -214,3 +216,45 @@ class GithubETL:
         inserted = self.store.insert_commits(rows)
         self.store.record_etl_run("commits", inserted, f"Fetched {len(rows)} commits")
         return inserted
+
+    def _was_reopened(
+        self,
+        owner: str,
+        repo: str,
+        number: Optional[int],
+        *,
+        token: Optional[str] = None,
+    ) -> bool:
+        if not number:
+            return False
+
+        endpoint = f"/repos/{owner}/{repo}/issues/{number}/events"
+        page = 1
+        while True:
+            response = self._request(
+                endpoint,
+                params={"per_page": 100, "page": page},
+                token=token,
+                use_etag=False,
+            )
+            if response.status_code >= 400:
+                if response.status_code == 404:
+                    return False
+                raise RuntimeError(f"GitHub API error {response.status_code}: {response.text}")
+
+            payload = response.json()
+            if isinstance(payload, list):
+                for event in payload:
+                    if isinstance(event, dict) and event.get("event") == "reopened":
+                        return True
+                if not payload:
+                    break
+            else:
+                break
+
+            if not self._has_next(response):
+                break
+
+            page += 1
+
+        return False

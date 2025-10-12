@@ -52,6 +52,7 @@ def test_github_etl_uses_etags_and_persists_data(tmp_path: Path):
             ],
             headers={"ETag": "etag-pr"},
         ),
+        FakeResponse(200, json_data=[]),
         FakeResponse(304, headers={"ETag": "etag-pr"}),
     ]
 
@@ -68,10 +69,11 @@ def test_github_etl_uses_etags_and_persists_data(tmp_path: Path):
     inserted_second = etl.sync_pull_requests("openai", "dev-agent-lens")
     assert inserted_second == 0
 
-    assert len(session.calls) == 2
+    assert len(session.calls) == 3
     first_headers = session.calls[0]["headers"]
     assert "If-None-Match" not in first_headers
-    second_headers = session.calls[1]["headers"]
+    assert session.calls[1]["url"].endswith("/issues/10/events")
+    second_headers = session.calls[2]["headers"]
     assert second_headers.get("If-None-Match") == "etag-pr"
 
 
@@ -96,11 +98,17 @@ def test_github_etl_classifies_reopened(status_code, tmp_path: Path):
                         "base": {"ref": "main"},
                         "draft": False,
                         "rebaseable": True,
-                        "reopened_at": "2024-01-05T10:30:00Z",
                     }
                 ],
                 headers={"ETag": "etag"},
-            )
+            ),
+            FakeResponse(
+                status_code,
+                json_data=[
+                    {"event": "closed"},
+                    {"event": "reopened"},
+                ],
+            ),
         ]
     )
     etl = GithubETL(store, session=session)
@@ -133,6 +141,7 @@ def test_github_etl_paginates_pull_requests(tmp_path: Path):
                 "Link": '<https://api.github.com/repos/openai/dev-agent-lens/pulls?page=2>; rel="next"',
             },
         ),
+        FakeResponse(200, json_data=[]),
         FakeResponse(
             200,
             json_data=[
@@ -148,6 +157,7 @@ def test_github_etl_paginates_pull_requests(tmp_path: Path):
                 }
             ],
         ),
+        FakeResponse(200, json_data=[]),
     ]
     session = FakeSession(responses)
     etl = GithubETL(store, session=session)
@@ -157,9 +167,9 @@ def test_github_etl_paginates_pull_requests(tmp_path: Path):
     assert inserted == 2
     assert len(store.fetch_pull_requests()) == 2
     assert session.calls[0]["params"]["page"] == 1
-    assert session.calls[1]["params"]["page"] == 2
+    assert session.calls[2]["params"]["page"] == 2
     assert "If-None-Match" not in session.calls[0]["headers"]
-    assert "If-None-Match" not in session.calls[1]["headers"]
+    assert "If-None-Match" not in session.calls[2]["headers"]
 
 
 def test_github_etl_paginates_commits(tmp_path: Path):
