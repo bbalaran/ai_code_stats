@@ -21,3 +21,6 @@ dependencies = [
 test = [
     "pytest>=7.0.0",
 ]
+
+[project.scripts]
+prod-lens = "prodlens.cli:main"
