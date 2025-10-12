@@ -243,9 +243,11 @@ class ReportGenerator:
 
         pearson = stats.pearsonr(merged["sessions"], merged["commits"])
         spearman = stats.spearmanr(merged["sessions"], merged["commits"])
+        pearson_p = None if getattr(pearson, "pvalue", None) is None else float(pearson.pvalue)
+        spearman_p = None if getattr(spearman, "pvalue", None) is None else float(spearman.pvalue)
         return {
-            "pearson": CorrelationResult(float(pearson.statistic), float(pearson.pvalue), count).to_dict(),
-            "spearman": CorrelationResult(float(spearman.statistic), float(spearman.pvalue), count).to_dict(),
+            "pearson": CorrelationResult(float(pearson.statistic), pearson_p, count).to_dict(),
+            "spearman": CorrelationResult(float(spearman.statistic), spearman_p, count).to_dict(),
             "lag_days": lag_days,
         }
 

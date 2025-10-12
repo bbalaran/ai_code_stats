@@ -172,6 +172,13 @@ def _extract_accepted_lines(attributes: Mapping[str, object]) -> Optional[int]:
     return None
 
 
+def _coerce_int(value: object) -> Optional[int]:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def normalize_records(records: Iterable[Mapping[str, object]]) -> List[CanonicalTrace]:
     """Normalize raw trace payloads into canonical ProdLens records."""
 
@@ -188,20 +195,26 @@ def normalize_records(records: Iterable[Mapping[str, object]]) -> List[Canonical
         usage = record.get("usage")
         if not isinstance(usage, Mapping):
             usage = {}
-        input_tokens = usage.get("input_tokens")
-        output_tokens = usage.get("output_tokens")
-        total_tokens = usage.get("total_tokens")
+        input_tokens = _coerce_int(usage.get("input_tokens"))
+        output_tokens = _coerce_int(usage.get("output_tokens"))
+        total_tokens = _coerce_int(usage.get("total_tokens"))
 
         if input_tokens is None and total_tokens is not None and output_tokens is not None:
-            input_tokens = int(total_tokens) - int(output_tokens)
+            input_tokens = max(total_tokens - output_tokens, 0)
         if input_tokens is None and total_tokens is not None:
-            input_tokens = int(total_tokens)
+            input_tokens = max(total_tokens, 0)
         if input_tokens is None:
             input_tokens = 0
+        else:
+            input_tokens = max(input_tokens, 0)
 
+        if output_tokens is None and total_tokens is not None:
+            # Derive output tokens from total minus input tokens, clamped at zero
+            output_tokens = max(total_tokens - input_tokens, 0)
         if output_tokens is None:
-            # When only total tokens are present, derive output tokens from the remainder
-            output_tokens = max(int(total_tokens or 0) - int(input_tokens), 0)
+            output_tokens = 0
+        else:
+            output_tokens = max(output_tokens, 0)
 
         timestamp = _ensure_datetime(record.get("timestamp") or record.get("start_time"))
         model = _extract_model(attributes)

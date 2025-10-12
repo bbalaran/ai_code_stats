@@ -81,27 +81,27 @@ def main():
     # Delegate to appropriate script
     if args.command == 'export':
         from src.export_traces import main as export_main
-        sys.argv = [sys.argv[0]] + remaining
+        sys.argv = [sys.argv[0], *remaining]
         export_main()
 
     elif args.command == 'analyze':
         from src.analyze_sessions import main as analyze_main
-        sys.argv = [sys.argv[0]] + remaining
+        sys.argv = [sys.argv[0], *remaining]
         analyze_main()
 
     elif args.command == 'reconstruct':
         from src.reconstruct_sessions import main as reconstruct_main
-        sys.argv = [sys.argv[0]] + remaining
+        sys.argv = [sys.argv[0], *remaining]
         reconstruct_main()
 
     elif args.command == 'compare':
         from src.compare_spans import main as compare_main
-        sys.argv = [sys.argv[0]] + remaining
+        sys.argv = [sys.argv[0], *remaining]
         compare_main()
 
     elif args.command == 'prod-lens':
         from src.prodlens.cli import main as prodlens_main
-        sys.argv = [sys.argv[0]] + remaining
+        sys.argv = [sys.argv[0], *remaining]
         prodlens_main()
 
     else:

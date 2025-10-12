@@ -9,9 +9,9 @@ from .trace_ingestion import TraceIngestor
 
 __all__ = [
     "CanonicalTrace",
+    "GithubETL",
     "normalize_records",
     "ProdLensStore",
-    "GithubETL",
     "ReportGenerator",
     "TraceIngestor",
 ]

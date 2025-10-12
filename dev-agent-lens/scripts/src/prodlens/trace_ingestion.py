@@ -16,7 +16,6 @@ MODEL_PRICING_PER_MILLION = {
     "anthropic/claude-3-opus": {"input": 15.0, "output": 75.0},
     "anthropic/claude-3-haiku": {"input": 1.0, "output": 5.0},
     "openai/gpt-4o": {"input": 5.0, "output": 15.0},
-    "openai/gpt-4.1": {"input": 30.0, "output": 60.0},
     "openai/gpt-4o-mini": {"input": 0.15, "output": 0.6},
 }
 

@@ -25,6 +25,12 @@ class ProdLensStore:
     def close(self) -> None:
         self.conn.close()
 
+    def __enter__(self) -> "ProdLensStore":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def _init_schema(self) -> None:
         with self.conn:
             self.conn.executescript(
