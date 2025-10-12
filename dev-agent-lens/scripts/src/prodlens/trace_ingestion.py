@@ -36,6 +36,25 @@ def _event_date(timestamp: dt.datetime) -> str:
     return timestamp.astimezone(dt.timezone.utc).date().isoformat()
 
 
+def _sanitize_repo_slug(value: str | None) -> str:
+    """Return a filesystem-safe repository slug."""
+
+    if not value:
+        return "unknown"
+
+    candidate = value.strip()
+    # Normalize path separators, reject traversal attempts
+    candidate = candidate.replace("\\", "/")
+    if ".." in candidate or candidate.startswith("/"):
+        raise ValueError(f"Invalid repo slug value: {value}")
+
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_/")
+    if not all(char in allowed for char in candidate):
+        raise ValueError(f"Invalid repo slug value: {value}")
+
+    return candidate
+
+
 def _validate_record(record: Mapping[str, object]) -> bool:
     required_keys = ("timestamp", "usage")
     for key in required_keys:
@@ -91,7 +110,7 @@ class TraceIngestor:
             if repo_slug and not record.repo_slug:
                 record.repo_slug = repo_slug
             rec_dict = record.to_record()
-            rec_dict["repo_slug"] = rec_dict.get("repo_slug") or repo_slug or "unknown"
+            rec_dict["repo_slug"] = _sanitize_repo_slug(rec_dict.get("repo_slug") or repo_slug)
             rec_dict["total_tokens"] = rec_dict["tokens_in"] + rec_dict["tokens_out"]
             rec_dict["event_date"] = _event_date(rec_dict["timestamp"])
             rec_dict["cost_usd"] = _estimate_cost(
@@ -119,7 +138,8 @@ class TraceIngestor:
         frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True)
 
         for (repo, event_date), group in frame.groupby(["repo_slug", "event_date"], dropna=False):
-            repo_dir = self.parquet_dir / (repo or "unknown")
+            safe_repo = _sanitize_repo_slug(repo)
+            repo_dir = self.parquet_dir / safe_repo
             repo_dir.mkdir(parents=True, exist_ok=True)
             parquet_path = repo_dir / f"{event_date}.parquet"
             if parquet_path.exists():

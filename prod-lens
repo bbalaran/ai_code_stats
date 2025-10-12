@@ -1,0 +1,3 @@
+#!/bin/bash
+# Convenience wrapper for prod-lens CLI from project root
+exec python3 -m dev-agent-lens.scripts.src.prodlens.cli "$@"
