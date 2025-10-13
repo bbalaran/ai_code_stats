@@ -28,6 +28,9 @@ uv sync
 # Export traces (auto-detects backend from .env)
 uv run main.py export
 
+# Export from specific Phoenix project
+uv run main.py export --project my-custom-project
+
 # Analyze session reconstruction
 uv run main.py analyze <trace_file>
 
@@ -136,7 +139,7 @@ The export script auto-detects whether to use Arize or Phoenix based on environm
 Uncomment these in `.env`:
 ```bash
 PHOENIX_URL=http://localhost:6006
-PHOENIX_PROJECT=claude-code-myproject
+PHOENIX_PROJECT=claude-code-myproject  # Optional, can use --project flag instead
 ```
 
 Make sure Phoenix is running locally. If not, start it:
@@ -235,7 +238,7 @@ The script automatically classifies and splits trace data into separate files, s
 - Check that the container is running: `docker ps | grep phoenix`
 
 **Error: No trace data found**
-- Verify the project name matches: `PHOENIX_PROJECT=claude-code-myproject`
+- Verify the project name matches: `PHOENIX_PROJECT=claude-code-myproject` or use `--project` flag
 - Check Phoenix UI at http://localhost:6006 to see if data exists
 - Ensure traces are being sent to Phoenix (check instrumentation setup)
 

@@ -3,12 +3,12 @@
 Unified Trace Data Export Script
 
 Auto-detects and exports from either Arize or Phoenix based on environment variables.
-- If PHOENIX_URL or PHOENIX_PROJECT is set → uses Phoenix
+- If PHOENIX_URL is set → uses Phoenix
 - If ARIZE_API_KEY is set → uses Arize
 - Otherwise → errors
 
 Usage Examples:
-    # Export from Phoenix (if PHOENIX_URL/PHOENIX_PROJECT is set)
+    # Export from Phoenix (if PHOENIX_URL is set)
     uv run export_traces.py
 
     # Export from Arize (if ARIZE_API_KEY is set)
@@ -46,7 +46,7 @@ def load_environment():
         load_dotenv(root_env)
 
     # Detect backend
-    has_phoenix = bool(os.getenv('PHOENIX_URL') or os.getenv('PHOENIX_PROJECT'))
+    has_phoenix = bool(os.getenv('PHOENIX_URL'))
     has_arize = bool(os.getenv('ARIZE_API_KEY'))
 
     return has_phoenix, has_arize
@@ -85,7 +85,6 @@ def main():
             print("\nPlease set environment variables in .env:")
             print("\nFor Phoenix:")
             print("  PHOENIX_URL=http://localhost:6006")
-            print("  PHOENIX_PROJECT=claude-code-myproject")
             print("\nFor Arize:")
             print("  ARIZE_API_KEY=your-api-key")
             print("  ARIZE_SPACE_KEY=your-space-key")

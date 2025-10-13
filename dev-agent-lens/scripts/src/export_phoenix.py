@@ -7,7 +7,7 @@ It normalizes the Phoenix schema to match Arize format for consistent analysis.
 
 Environment Variables (Optional):
     PHOENIX_URL: Phoenix server URL (default: http://localhost:6006)
-    PHOENIX_PROJECT: Project name in Phoenix (default: claude-code-myproject)
+    PHOENIX_PROJECT: Project name in Phoenix (default: claude-code-myproject, can be overridden with --project)
 
 Usage Examples:
     # Export data from today (default - JSONL format)
@@ -21,6 +21,9 @@ Usage Examples:
 
     # Export to CSV format
     uv run export_phoenix_data.py --output phoenix_traces.csv --format csv
+
+    # Export from a specific project (overrides PHOENIX_PROJECT env var)
+    uv run export_phoenix_data.py --project my-custom-project
 """
 
 import argparse
@@ -95,10 +98,16 @@ def parse_args():
         help='Overwrite existing files (re-export data)'
     )
 
+    parser.add_argument(
+        '--project',
+        type=str,
+        help='Project name in Phoenix (overrides PHOENIX_PROJECT env var)'
+    )
+
     return parser.parse_args()
 
 
-def load_environment():
+def load_environment(project_override=None):
     """Load and validate environment variables."""
     # Load from .env file if it exists
     script_env = Path(__file__).parent / '.env'
@@ -111,7 +120,7 @@ def load_environment():
 
     # Get Phoenix configuration
     phoenix_url = os.getenv('PHOENIX_URL', 'http://localhost:6006')
-    phoenix_project = os.getenv('PHOENIX_PROJECT', 'claude-code-myproject')
+    phoenix_project = project_override or os.getenv('PHOENIX_PROJECT', 'claude-code-myproject')
 
     return phoenix_url, phoenix_project
 
@@ -240,7 +249,7 @@ def export_traces(args):
             for name in deleted:
                 print(f"    - {name}")
 
-    phoenix_url, phoenix_project = load_environment()
+    phoenix_url, phoenix_project = load_environment(args.project)
 
     print(f"🔄 Connecting to Phoenix at {phoenix_url}")
     print(f"📦 Project: {phoenix_project}")
