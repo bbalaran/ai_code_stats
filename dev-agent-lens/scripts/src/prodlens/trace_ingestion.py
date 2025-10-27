@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover - Windows compatibility
     fcntl = None  # type: ignore
 
 from .storage import ProdLensStore
-from .trace_normalizer import normalize_records
+from .trace_normalizer import normalize_records, TraceFormat
 
 
 MODEL_PRICING_PER_MILLION = {
@@ -70,7 +70,7 @@ def _validate_record(record: Mapping[str, object]) -> bool:
 
 
 class TraceIngestor:
-    """Ingest LiteLLM proxy JSONL traces into the ProdLens store."""
+    """Ingest trace data (LiteLLM or Arize format) into the ProdLens store."""
 
     def __init__(
         self,
@@ -85,13 +85,16 @@ class TraceIngestor:
         self.dead_letter_dir.mkdir(parents=True, exist_ok=True)
         self.parquet_dir.mkdir(parents=True, exist_ok=True)
 
-    def ingest_file(self, path: Path | str, *, repo_slug: str | None = None) -> int:
+    def ingest_file(self, path: Path | str, *, repo_slug: str | None = None, format: str = "litellm") -> int:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(path)
 
         raw_records: List[Mapping[str, object]] = []
         invalid_lines: List[str] = []
+        
+        # Convert string format to TraceFormat enum
+        trace_format = TraceFormat.ARIZE if format.lower() == "arize" else TraceFormat.LITELLM
 
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
@@ -103,12 +106,16 @@ class TraceIngestor:
                 except json.JSONDecodeError:
                     invalid_lines.append(stripped)
                     continue
-                if not isinstance(payload, dict) or not _validate_record(payload):
+                if not isinstance(payload, dict):
+                    invalid_lines.append(stripped)
+                    continue
+                # Skip validation for Arize format as it has different structure
+                if trace_format == TraceFormat.LITELLM and not _validate_record(payload):
                     invalid_lines.append(stripped)
                     continue
                 raw_records.append(payload)
 
-        normalized = normalize_records(raw_records)
+        normalized = normalize_records(raw_records, format=trace_format)
 
         prepared_rows: List[dict] = []
         for record in normalized:

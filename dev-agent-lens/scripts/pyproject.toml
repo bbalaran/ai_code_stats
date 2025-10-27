@@ -24,3 +24,8 @@ test = [
 
 [project.scripts]
 prod-lens = "prodlens.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

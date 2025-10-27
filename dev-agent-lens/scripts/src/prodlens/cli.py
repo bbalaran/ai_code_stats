@@ -29,9 +29,16 @@ def create_parser() -> argparse.ArgumentParser:
 
 def _create_ingest_traces_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="prod-lens ingest-traces")
-    parser.add_argument("input", type=Path, help="Path to LiteLLM trace JSONL file")
+    parser.add_argument("input", type=Path, help="Path to trace JSONL file (LiteLLM or Arize format)")
     parser.add_argument("--db", type=Path, default=Path(".prod-lens/cache.db"), help="Path to ProdLens SQLite cache")
     parser.add_argument("--repo", help="Repository slug (owner/name) applied to normalized records")
+    parser.add_argument(
+        "--format",
+        type=str,
+        choices=["litellm", "arize"],
+        default="litellm",
+        help="Trace format (default: litellm)",
+    )
     parser.add_argument(
         "--dead-letter-dir",
         type=Path,
@@ -88,7 +95,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
                 dead_letter_dir=args.dead_letter_dir,
                 parquet_dir=args.parquet_dir,
             )
-            inserted = ingestor.ingest_file(args.input, repo_slug=args.repo)
+            inserted = ingestor.ingest_file(args.input, repo_slug=args.repo, format=args.format)
         print(f"✅ Ingested {inserted} trace records into {args.db}")
         return
 

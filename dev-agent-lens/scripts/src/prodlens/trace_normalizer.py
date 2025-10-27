@@ -3,11 +3,17 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+from enum import Enum
 from typing import Iterable, List, Mapping, Optional
 
 from .schemas import CanonicalTrace
 
 _SESSION_PATTERN = re.compile(r"session[_-]([a-zA-Z0-9_-]+)")
+
+
+class TraceFormat(Enum):
+    LITELLM = "litellm"
+    ARIZE = "arize"
 
 
 def _ensure_datetime(value: Optional[str]) -> dt.datetime:
@@ -179,9 +185,21 @@ def _coerce_int(value: object) -> Optional[int]:
         return None
 
 
-def normalize_records(records: Iterable[Mapping[str, object]]) -> List[CanonicalTrace]:
-    """Normalize raw trace payloads into canonical ProdLens records."""
+def normalize_records(records: Iterable[Mapping[str, object]], format: TraceFormat = TraceFormat.LITELLM) -> List[CanonicalTrace]:
+    """Normalize raw trace payloads into canonical ProdLens records.
+    
+    Args:
+        records: Iterable of raw trace records
+        format: The format of the input traces (LITELLM or ARIZE)
+    """
+    if format == TraceFormat.ARIZE:
+        return _normalize_arize_records(records)
+    else:
+        return _normalize_litellm_records(records)
 
+
+def _normalize_litellm_records(records: Iterable[Mapping[str, object]]) -> List[CanonicalTrace]:
+    """Normalize LiteLLM trace payloads into canonical ProdLens records."""
     normalized: List[CanonicalTrace] = []
     for record in records:
         attributes = record.get("attributes")
@@ -239,4 +257,103 @@ def normalize_records(records: Iterable[Mapping[str, object]]) -> List[Canonical
             )
         )
 
+    return normalized
+
+
+def _normalize_arize_records(records: Iterable[Mapping[str, object]]) -> List[CanonicalTrace]:
+    """Normalize Arize/Phoenix trace payloads into canonical ProdLens records."""
+    normalized: List[CanonicalTrace] = []
+    for record in records:
+        # Extract attributes - Arize format has flattened attributes
+        attributes = {}
+        for key, value in record.items():
+            if key.startswith("attributes."):
+                attr_key = key.replace("attributes.", "")
+                attributes[attr_key] = value
+        
+        # Extract metadata from attributes
+        metadata = attributes.get("metadata", {})
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {"raw": metadata}
+        elif not isinstance(metadata, Mapping):
+            metadata = {}
+        
+        session_id = _extract_session_id(metadata)
+        developer_id = _extract_developer_id(metadata)
+        
+        # Extract token counts from Arize format
+        input_tokens = _coerce_int(attributes.get("llm.token_count.prompt", 0))
+        output_tokens = _coerce_int(attributes.get("llm.token_count.completion", 0))
+        total_tokens = _coerce_int(attributes.get("llm.token_count.total", 0))
+        
+        if input_tokens is None and total_tokens is not None and output_tokens is not None:
+            input_tokens = max(total_tokens - output_tokens, 0)
+        if input_tokens is None and total_tokens is not None:
+            input_tokens = max(total_tokens, 0)
+        if input_tokens is None:
+            input_tokens = 0
+        else:
+            input_tokens = max(input_tokens, 0)
+
+        if output_tokens is None and total_tokens is not None:
+            output_tokens = max(total_tokens - input_tokens, 0)
+        if output_tokens is None:
+            output_tokens = 0
+        else:
+            output_tokens = max(output_tokens, 0)
+        
+        # Extract timestamp - Arize uses milliseconds since epoch
+        start_time_ms = record.get("start_time")
+        if start_time_ms is not None:
+            # Convert from milliseconds to seconds
+            timestamp = _ensure_datetime(start_time_ms / 1000)
+        else:
+            timestamp = _ensure_datetime(None)
+        
+        # Extract model
+        model = attributes.get("llm.model_name") or attributes.get("model")
+        if model:
+            model = str(model)
+        
+        # Calculate latency from start/end times
+        start_time = record.get("start_time")
+        end_time = record.get("end_time")
+        if start_time is not None and end_time is not None:
+            # Times are in milliseconds since epoch
+            latency = float(end_time) - float(start_time)
+        else:
+            latency = 0.0
+        
+        # Extract status code
+        status_code_str = record.get("status_code", "UNSET")
+        if status_code_str == "OK":
+            status = 200
+        elif status_code_str == "ERROR":
+            status = 500
+        else:
+            status = None
+        
+        # Extract accepted flag and other ProdLens-specific fields
+        accepted = _extract_accept_flag(attributes)
+        
+        normalized.append(
+            CanonicalTrace(
+                session_id=session_id,
+                developer_id=developer_id,
+                timestamp=timestamp,
+                model=model,
+                tokens_in=int(input_tokens),
+                tokens_out=int(output_tokens),
+                latency_ms=float(latency),
+                status_code=status,
+                accepted_flag=accepted,
+                repo_slug=_extract_repo_slug(metadata, attributes),
+                diff_ratio=_extract_diff_ratio(attributes),
+                accepted_lines=_extract_accepted_lines(attributes),
+            )
+        )
+    
     return normalized
