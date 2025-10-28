@@ -299,3 +299,61 @@ class ReportGenerator:
             adjusted[label] = adjusted_value
 
         return {"method": "benjamini-hochberg", "adjusted": adjusted}
+
+    def compute_effect_sizes(self, sessions: pd.DataFrame, pull_requests: pd.DataFrame) -> Dict[str, object]:
+        """Compute effect sizes comparing accepted vs rejected code."""
+        if sessions.empty:
+            return {}
+
+        accepted = sessions[sessions["accepted_flag"] == 1]
+        rejected = sessions[sessions["accepted_flag"] == 0]
+
+        effect_sizes = {}
+
+        # Latency effect size (Cohen's d approximation)
+        if not accepted.empty and not rejected.empty:
+            accepted_latency = accepted["latency_ms"].mean()
+            rejected_latency = rejected["latency_ms"].mean()
+            pooled_std = ((accepted["latency_ms"].std() + rejected["latency_ms"].std()) / 2)
+            # Check both that pooled_std > 0 and is not NaN
+            if pooled_std > 0 and not pd.isna(pooled_std):
+                cohens_d = (accepted_latency - rejected_latency) / pooled_std
+                effect_sizes["latency_cohens_d"] = float(cohens_d)
+
+        # Token efficiency effect size
+        if not accepted.empty:
+            accepted_tokens = accepted["total_tokens"].fillna(0).mean()
+            total_tokens = sessions["total_tokens"].fillna(0).mean()
+            if total_tokens > 0:
+                token_efficiency_ratio = accepted_tokens / total_tokens
+                effect_sizes["token_efficiency_ratio"] = float(token_efficiency_ratio)
+
+        # Model comparison if available
+        if "model" in sessions.columns:
+            models = sessions["model"].unique()
+            model_acceptance = {}
+            for model in models:
+                model_sessions = sessions[sessions["model"] == model]
+                if not model_sessions.empty:
+                    acceptance_rate = (model_sessions["accepted_flag"] == 1).mean()
+                    model_acceptance[str(model)] = float(acceptance_rate)
+            if model_acceptance:
+                effect_sizes["model_acceptance_rates"] = model_acceptance
+
+        return effect_sizes
+
+    def get_correlations_with_effect_sizes(self, sessions: pd.DataFrame, commits: pd.DataFrame, lag_days: int = 1) -> Dict[str, object]:
+        """Compute correlations with associated effect size metrics."""
+        correlations = self._compute_correlations(sessions, commits, lag_days)
+
+        # Add effect size context
+        effect_sizes = self.compute_effect_sizes(sessions, pd.DataFrame())
+        correlations["effect_sizes"] = effect_sizes
+
+        # Compute percentage changes for interpretation
+        session_daily = sessions.groupby(sessions["timestamp"].dt.date).size()
+        if len(session_daily) > 1:
+            daily_growth = ((session_daily.iloc[-1] - session_daily.iloc[0]) / max(session_daily.iloc[0], 1)) * 100
+            correlations["session_growth_percent"] = float(daily_growth)
+
+        return correlations
