@@ -7,6 +7,7 @@ import { Metrics } from './pages/Metrics';
 import { Insights } from './pages/Insights';
 import { Sessions } from './pages/Sessions';
 import { Chat } from './pages/Chat';
+import { LiveMonitor } from './pages/LiveMonitor';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="metrics" element={<Metrics />} />
             <Route path="insights" element={<Insights />} />
             <Route path="sessions" element={<Sessions />} />
+            <Route path="live" element={<LiveMonitor />} />
             <Route path="chat" element={<Chat />} />
           </Route>
         </Routes>

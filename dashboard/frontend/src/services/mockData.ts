@@ -19,7 +19,6 @@ interface ActivityHeatmap {
 }
 
 const MODELS = ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
-const LANGUAGES = ['TypeScript', 'Python', 'JavaScript', 'Go', 'Rust', 'Java'];
 const TASK_TYPES: TaskType[] = [
   'code_generation',
   'refactoring',
@@ -207,7 +206,6 @@ export function generateSkillBadges(): SkillBadge[] {
 }
 
 export function generateLanguageUsage(): LanguageUsage[] {
-  const total = 100;
   return [
     { language: 'TypeScript', percentage: 35, sessionCount: 52 },
     { language: 'Python', percentage: 28, sessionCount: 42 },

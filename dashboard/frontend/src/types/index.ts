@@ -117,5 +117,3 @@ export type TaskType =
   | 'code_review'
   | 'architecture';
 
-// Force export
-export type { ActivityHeatmap };

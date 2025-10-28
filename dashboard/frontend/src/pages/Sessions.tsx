@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { mockData } from '../services/mockData';
-import { Search, Filter, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Session } from '../types';
 
@@ -13,10 +13,10 @@ export function Sessions() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  const allModels = ['all', ...Array.from(new Set(mockData.sessions.map(s => s.model).filter(Boolean)))];
+  const allModels = ['all', ...Array.from(new Set(mockData.sessions.map((s: Session) => s.model).filter(Boolean)))];
 
   const filteredAndSortedSessions = useMemo(() => {
-    let filtered = mockData.sessions.filter(session => {
+    let filtered = mockData.sessions.filter((session: Session) => {
       const matchesSearch =
         session.session_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         session.model?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -29,7 +29,7 @@ export function Sessions() {
       return matchesSearch && matchesModel && matchesStatus;
     });
 
-    filtered.sort((a, b) => {
+    filtered.sort((a: Session, b: Session) => {
       const aVal = a[sortField];
       const bVal = b[sortField];
       const direction = sortDirection === 'asc' ? 1 : -1;
@@ -86,8 +86,8 @@ export function Sessions() {
           onChange={(e) => setSelectedModel(e.target.value)}
           className="px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
         >
-          {allModels.map(model => (
-            <option key={model} value={model}>
+          {allModels.map((model: string) => (
+            <option key={model} value={model as string}>
               {model === 'all' ? 'All Models' : model}
             </option>
           ))}
@@ -164,7 +164,7 @@ export function Sessions() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paginatedSessions.map(session => (
+              {paginatedSessions.map((session: Session) => (
                 <tr key={session.id} className="hover:bg-accent/50 transition-colors">
                   <td className="p-4 text-sm font-mono text-muted-foreground">
                     {session.session_id?.substring(0, 12)}...
