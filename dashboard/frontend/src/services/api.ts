@@ -1,0 +1,400 @@
+/**
+ * API Integration Layer
+ *
+ * This service provides a centralized interface for all API calls to the backend.
+ * Currently using mock data, but can be easily switched to real API endpoints.
+ */
+
+import { mockData } from './mockData';
+import type { Session, DashboardMetrics, Insight, UserProfile, ProfileDimension, SkillBadge, LanguageUsage } from '../types';
+
+// Define ActivityHeatmap type for API
+interface ActivityHeatmap {
+  day: number;
+  hour: number;
+  value: number;
+}
+
+// API Base URL - configure this based on environment
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+/**
+ * Validates a URL to ensure it's a valid string
+ * @param url - The URL to validate
+ * @throws Error if URL is invalid
+ */
+function validateUrl(url: string): void {
+  if (!url || typeof url !== 'string') {
+    throw new Error('Invalid URL: URL must be a non-empty string');
+  }
+
+  // Basic URL validation using URL constructor
+  try {
+    new URL(url);
+  } catch {
+    throw new Error(`Invalid URL format: ${url}`);
+  }
+}
+
+/**
+ * Fetch with error handling, timeout, and URL validation
+ *
+ * @param url - The URL to fetch from
+ * @param options - Fetch options
+ * @param timeout - Timeout in milliseconds (default: 5000)
+ * @returns Response object
+ * @throws Error if URL is invalid, request times out, or response is not ok
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 5000) {
+  // Validate URL before making the request
+  validateUrl(url);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    return response;
+  } catch (error) {
+    // Provide more specific error messages for common failure modes
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error('Network error: Unable to reach the API server');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Metrics API
+ */
+export const metricsAPI = {
+  /**
+   * Get dashboard overview metrics
+   */
+  async getOverviewMetrics(): Promise<DashboardMetrics> {
+    try {
+      // Try to fetch from API
+      const response = await fetchWithTimeout(`${API_BASE_URL}/metrics/overview`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch overview metrics from API, using mock data:', error);
+      return mockData.dashboardMetrics;
+    }
+  },
+
+  /**
+   * Get time-series data for charts
+   */
+  async getTimeSeriesData(days: number = 30): Promise<Array<{ date: string; value: number }>> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/metrics/timeseries?days=${days}`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch time-series data from API, using mock data:', error);
+      return mockData.metricTrends;
+    }
+  },
+
+  /**
+   * Get hourly activity data
+   */
+  async getHourlyActivity(): Promise<Array<{ hour: number; sessions: number }>> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/metrics/hourly`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch hourly activity from API, using mock data:', error);
+      // Generate hourly data from activity heatmap
+      const hourlyMap = new Map<number, number>();
+      for (let hour = 0; hour < 24; hour++) {
+        hourlyMap.set(hour, Math.floor(Math.random() * 20) + 5);
+      }
+      return Array.from(hourlyMap, ([hour, sessions]) => ({ hour, sessions }));
+    }
+  },
+};
+
+/**
+ * Sessions API
+ */
+export const sessionsAPI = {
+  /**
+   * Get list of sessions with optional filters
+   */
+  async listSessions(filters?: {
+    limit?: number;
+    offset?: number;
+    model?: string;
+    status?: string;
+  }): Promise<Session[]> {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.limit) params.append('limit', filters.limit.toString());
+      if (filters?.offset) params.append('offset', filters.offset.toString());
+      if (filters?.model) params.append('model', filters.model);
+      if (filters?.status) params.append('status', filters.status);
+
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/sessions${params.toString() ? `?${params.toString()}` : ''}`
+      );
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch sessions from API, using mock data:', error);
+      return mockData.sessions;
+    }
+  },
+
+  /**
+   * Get detailed information about a specific session
+   */
+  async getSession(sessionId: string): Promise<Session | null> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}`);
+      return response.json();
+    } catch (error) {
+      console.warn(`Failed to fetch session ${sessionId} from API:`, error);
+      return mockData.sessions.find((s: Session) => s.session_id === sessionId) || null;
+    }
+  },
+
+  /**
+   * Get recent sessions
+   */
+  async getRecentSessions(limit: number = 10): Promise<Session[]> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/sessions?limit=${limit}&sort=timestamp&order=desc`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch recent sessions from API, using mock data:', error);
+      return mockData.sessions.slice(0, limit);
+    }
+  },
+};
+
+/**
+ * Profile API
+ */
+export const profileAPI = {
+  /**
+   * Get current user profile
+   */
+  async getUserProfile(): Promise<UserProfile> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/profile`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch user profile from API, using mock data:', error);
+      return mockData.userProfile;
+    }
+  },
+
+  /**
+   * Get proficiency dimensions
+   */
+  async getProfileDimensions(): Promise<ProfileDimension[]> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/profile/dimensions`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch profile dimensions from API, using mock data:', error);
+      return mockData.profileDimensions;
+    }
+  },
+
+  /**
+   * Get skill badges
+   */
+  async getSkillBadges(): Promise<SkillBadge[]> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/profile/badges`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch skill badges from API, using mock data:', error);
+      return mockData.skillBadges;
+    }
+  },
+
+  /**
+   * Get language usage data
+   */
+  async getLanguageUsage(): Promise<LanguageUsage[]> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/profile/languages`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch language usage from API, using mock data:', error);
+      return mockData.languageUsage;
+    }
+  },
+};
+
+/**
+ * Insights API
+ */
+export const insightsAPI = {
+  /**
+   * Get insights with optional filtering
+   */
+  async getInsights(filters?: {
+    category?: string;
+    limit?: number;
+  }): Promise<Insight[]> {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.category) params.append('category', filters.category);
+      if (filters?.limit) params.append('limit', filters.limit.toString());
+
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/insights${params.toString() ? `?${params.toString()}` : ''}`
+      );
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch insights from API, using mock data:', error);
+      return mockData.insights;
+    }
+  },
+
+  /**
+   * Dismiss an insight
+   */
+  async dismissInsight(insightId: string): Promise<boolean> {
+    try {
+      await fetchWithTimeout(`${API_BASE_URL}/insights/${insightId}/dismiss`, {
+        method: 'POST',
+      });
+      return true;
+    } catch (error) {
+      console.warn(`Failed to dismiss insight ${insightId}:`, error);
+      return false;
+    }
+  },
+};
+
+/**
+ * Activity API
+ */
+export const activityAPI = {
+  /**
+   * Get activity heatmap data
+   */
+  async getActivityHeatmap(): Promise<ActivityHeatmap[]> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/activity/heatmap`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch activity heatmap from API, using mock data:', error);
+      return mockData.activityHeatmap;
+    }
+  },
+
+  /**
+   * Get activity trends over time
+   */
+  async getActivityTrends(days: number = 30): Promise<Array<{ date: string; value: number }>> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/activity/trends?days=${days}`);
+      return response.json();
+    } catch (error) {
+      console.warn('Failed to fetch activity trends from API, using mock data:', error);
+      return mockData.metricTrends;
+    }
+  },
+};
+
+/**
+ * Real-time API (WebSocket)
+ */
+export const realtimeAPI = {
+  /**
+   * Connect to WebSocket for real-time session updates
+   * Returns WebSocket connection that can be used to listen to events
+   */
+  connectToSessionStream(callbacks: {
+    onSessionStarted?: (session: Session) => void;
+    onSessionCompleted?: (session: Session) => void;
+    onError?: (error: string) => void;
+    onConnectionEstablished?: () => void;
+  }): WebSocket | null {
+    try {
+      const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/api/ws/sessions';
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        callbacks.onConnectionEstablished?.();
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+
+        if (message.type === 'session_started') {
+          callbacks.onSessionStarted?.(message.data);
+        } else if (message.type === 'session_completed') {
+          callbacks.onSessionCompleted?.(message.data);
+        }
+      };
+
+      ws.onerror = (event) => {
+        // Log error details in development mode for debugging
+        const errorMessage = event instanceof Event
+          ? 'WebSocket connection error'
+          : typeof event === 'string'
+          ? event
+          : 'Unknown WebSocket error';
+
+        if (import.meta.env.DEV) {
+          console.error('WebSocket error:', event, errorMessage);
+        }
+
+        callbacks.onError?.(errorMessage);
+      };
+
+      ws.onclose = (event) => {
+        // Log closure information in development mode
+        if (import.meta.env.DEV && !event.wasClean) {
+          console.warn(`WebSocket closed: Code ${event.code}, Reason: ${event.reason || 'unknown'}`);
+        }
+      };
+
+      return ws;
+    } catch (error) {
+      const errorMessage = error instanceof Error
+        ? `Failed to establish WebSocket connection: ${error.message}`
+        : 'Failed to establish WebSocket connection';
+
+      if (import.meta.env.DEV) {
+        console.error('WebSocket initialization error:', error);
+      }
+
+      callbacks.onError?.(errorMessage);
+      return null;
+    }
+  },
+};
+
+/**
+ * Export all API modules
+ */
+export const api = {
+  metrics: metricsAPI,
+  sessions: sessionsAPI,
+  profile: profileAPI,
+  insights: insightsAPI,
+  activity: activityAPI,
+  realtime: realtimeAPI,
+};
+
+export default api;
