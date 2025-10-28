@@ -407,11 +407,23 @@ class ProdLensStore:
 
     def set_checkpoint(self, job_name: str, checkpoint_timestamp: dt.datetime) -> None:
         """Record a successful checkpoint for incremental processing."""
-        self.record_etl_run(
-            job_name,
-            0,
-            f"Checkpoint at {checkpoint_timestamp.isoformat()}",
-        )
+        # Convert to UTC if needed
+        if checkpoint_timestamp.tzinfo is None:
+            checkpoint_timestamp = checkpoint_timestamp.replace(tzinfo=dt.timezone.utc)
+        elif checkpoint_timestamp.tzinfo != dt.timezone.utc:
+            checkpoint_timestamp = checkpoint_timestamp.astimezone(dt.timezone.utc)
+
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO etl_runs (job, started_at, finished_at, row_count, details) VALUES (?, ?, ?, ?, ?)",
+                (
+                    job_name,
+                    checkpoint_timestamp.isoformat(),
+                    checkpoint_timestamp.isoformat(),
+                    0,
+                    f"Checkpoint at {checkpoint_timestamp.isoformat()}",
+                ),
+            )
 
     # ------------------------------------------------------------------
     # Daily aggregation tables
@@ -468,6 +480,11 @@ class ProdLensStore:
         rows = []
         for metric in metrics:
             record = dict(metric)
+            # Validate required fields
+            if "event_date" not in record:
+                raise ValueError("Missing required field: event_date")
+            # Set defaults for optional fields
+            record.setdefault("developer_id", None)
             record.setdefault("created_at", dt.datetime.now(tz=dt.timezone.utc).isoformat())
             rows.append(record)
 

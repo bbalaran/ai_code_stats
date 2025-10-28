@@ -39,13 +39,17 @@ class DailyAggregator:
         metrics = {}
 
         for date, group in grouped:
+            # Handle potential NaN values from median calculation
+            median_val = group["latency_ms"].median()
+            median_latency_ms = float(median_val) if pd.notna(median_val) else 0.0
+
             metrics[str(date)] = {
                 "event_date": str(date),
                 "session_count": len(group),
                 "total_tokens": int(group["tokens_in"].fillna(0).sum() + group["tokens_out"].fillna(0).sum()),
                 "accepted_count": int((group["accepted_flag"] == 1).sum()),
                 "error_count": int((group["status_code"] >= 400).sum()),
-                "median_latency_ms": float(group["latency_ms"].median()),
+                "median_latency_ms": median_latency_ms,
                 "cost_usd": float(group.get("cost_usd", pd.Series(dtype=float)).fillna(0).sum()),
             }
 
@@ -153,10 +157,18 @@ class ParquetExporter:
         if repo_filter:
             sessions = sessions[sessions["repo_slug"] == repo_filter]
 
+        # Validate required columns exist before groupby
+        required_columns = ["event_date", "repo_slug"]
+        missing_columns = [col for col in required_columns if col not in sessions.columns]
+        if missing_columns:
+            raise KeyError(f"Missing required columns for export: {missing_columns}")
+
         # Group by date and repo_slug for partitioning
         export_count = 0
         for (event_date, repo), group in sessions.groupby(["event_date", "repo_slug"], dropna=False):
-            repo_dir = self.parquet_dir / str(repo or "unknown")
+            # Sanitize repo_slug to prevent path traversal attacks
+            safe_repo = str(repo or "unknown").replace("..", "_").replace("/", "-").replace("\\", "-")
+            repo_dir = self.parquet_dir / safe_repo
             repo_dir.mkdir(parents=True, exist_ok=True)
 
             output_path = repo_dir / f"{event_date}.parquet"

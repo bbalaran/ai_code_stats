@@ -315,7 +315,8 @@ class ReportGenerator:
             accepted_latency = accepted["latency_ms"].mean()
             rejected_latency = rejected["latency_ms"].mean()
             pooled_std = ((accepted["latency_ms"].std() + rejected["latency_ms"].std()) / 2)
-            if pooled_std > 0:
+            # Check both that pooled_std > 0 and is not NaN
+            if pooled_std > 0 and not pd.isna(pooled_std):
                 cohens_d = (accepted_latency - rejected_latency) / pooled_std
                 effect_sizes["latency_cohens_d"] = float(cohens_d)
 
