@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, TrendingUp, Calendar, Code } from 'lucide-react';
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface Message {
   id: string;
@@ -27,10 +28,18 @@ const exampleQueries = [
   },
 ];
 
+/**
+ * Chat Page Component
+ *
+ * Provides natural language interface for querying AI coding statistics
+ */
 export function Chat() {
+  usePageTitle('Chat', 'Assistant');
+  const messageCounterRef = useRef(1);
+
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: '1',
+      id: '0',
       role: 'assistant',
       content:
         "Hi! I'm your AI coding insights assistant. Ask me anything about your development patterns, AI usage, productivity metrics, or trends. I can help you understand your data better!",
@@ -102,8 +111,12 @@ export function Chat() {
   const handleSend = async () => {
     if (!input.trim()) return;
 
+    // Generate unique message IDs using counter to avoid race conditions
+    const userMessageId = messageCounterRef.current.toString();
+    messageCounterRef.current += 1;
+
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: userMessageId,
       role: 'user',
       content: input,
       timestamp: new Date(),
@@ -116,8 +129,11 @@ export function Chat() {
     // Simulate AI thinking time
     setTimeout(() => {
       const response = generateResponse(input);
+      const assistantMessageId = messageCounterRef.current.toString();
+      messageCounterRef.current += 1;
+
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: assistantMessageId,
         role: 'assistant',
         content: response,
         timestamp: new Date(),

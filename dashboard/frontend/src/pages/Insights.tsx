@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 import { AlertCircle, TrendingUp, DollarSign, Lightbulb, X, ChevronRight, Filter } from 'lucide-react';
 import type { Insight } from '../types';
+
+/**
+ * Insights Page Component
+ *
+ * Displays AI-generated recommendations based on coding patterns
+ */
 
 const categoryIcons = {
   efficiency: TrendingUp,
@@ -24,6 +31,7 @@ const impactColors = {
 };
 
 export function Insights() {
+  usePageTitle('Insights', 'AI Recommendations');
   const [insights, setInsights] = useState<Insight[]>(mockData.insights);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 

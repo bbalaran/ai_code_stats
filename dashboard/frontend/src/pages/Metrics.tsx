@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   LineChart,
   Line,
@@ -28,7 +29,14 @@ const tabs = [
   { id: 'learning' as TabType, label: 'Learning & Growth', icon: BookOpen },
 ];
 
+/**
+ * Metrics Page Component
+ *
+ * Displays detailed analytics across productivity, quality, usage, and learning dimensions
+ */
+
 export function Metrics() {
+  usePageTitle('Metrics', 'Deep Analytics');
   const [activeTab, setActiveTab] = useState<TabType>('productivity');
 
   // Productivity metrics

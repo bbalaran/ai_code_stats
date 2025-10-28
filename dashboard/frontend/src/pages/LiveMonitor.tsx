@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   Activity,
   AlertCircle,
@@ -16,12 +17,19 @@ import {
 import { format } from 'date-fns';
 import type { Session } from '../types';
 
+/**
+ * Live Monitor Page Component
+ *
+ * Real-time monitoring of active coding sessions
+ */
+
 interface LiveSession extends Session {
   status: 'active' | 'completed' | 'error';
   progress?: number;
 }
 
 export function LiveMonitor() {
+  usePageTitle('Live Monitor', 'Real-time Sessions');
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
   const [activeSessionCount, setActiveSessionCount] = useState(0);
   const [totalToday, setTotalToday] = useState(0);

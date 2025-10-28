@@ -301,7 +301,6 @@ export const realtimeAPI = {
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('Connected to WebSocket');
         callbacks.onConnectionEstablished?.();
       };
 
@@ -316,13 +315,11 @@ export const realtimeAPI = {
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
         callbacks.onError?.('WebSocket connection error');
       };
 
       return ws;
     } catch (error) {
-      console.error('Failed to connect to WebSocket:', error);
       callbacks.onError?.('Failed to establish WebSocket connection');
       return null;
     }

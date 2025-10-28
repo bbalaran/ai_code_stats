@@ -1,10 +1,18 @@
 import { useState, useMemo } from 'react';
 import { mockData } from '../services/mockData';
-import { Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { usePageTitle } from '../hooks/usePageTitle';
+import { EmptyState } from '../components/EmptyState';
+import { Search, ChevronDown, ChevronUp, Database } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Session } from '../types';
 
+/**
+ * Sessions Page Component
+ *
+ * Displays session history with search, filtering, and sorting capabilities
+ */
 export function Sessions() {
+  usePageTitle('Sessions', 'Session History');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -109,104 +117,116 @@ export function Sessions() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="text-left p-4 text-sm font-medium">
-                  <button
-                    onClick={() => handleSort('session_id')}
-                    className="flex items-center gap-1 hover:text-foreground"
-                  >
-                    Session ID
-                    {sortField === 'session_id' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
-                </th>
-                <th className="text-left p-4 text-sm font-medium">
-                  <button
-                    onClick={() => handleSort('timestamp')}
-                    className="flex items-center gap-1 hover:text-foreground"
-                  >
-                    Timestamp
-                    {sortField === 'timestamp' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
-                </th>
-                <th className="text-left p-4 text-sm font-medium">Model</th>
-                <th className="text-right p-4 text-sm font-medium">
-                  <button
-                    onClick={() => handleSort('total_tokens')}
-                    className="flex items-center gap-1 hover:text-foreground ml-auto"
-                  >
-                    Tokens
-                    {sortField === 'total_tokens' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
-                </th>
-                <th className="text-right p-4 text-sm font-medium">
-                  <button
-                    onClick={() => handleSort('latency_ms')}
-                    className="flex items-center gap-1 hover:text-foreground ml-auto"
-                  >
-                    Duration
-                    {sortField === 'latency_ms' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
-                </th>
-                <th className="text-center p-4 text-sm font-medium">Status</th>
-                <th className="text-center p-4 text-sm font-medium">Accepted</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paginatedSessions.map((session: Session) => (
-                <tr key={session.id} className="hover:bg-accent/50 transition-colors">
-                  <td className="p-4 text-sm font-mono text-muted-foreground">
-                    {session.session_id?.substring(0, 12)}...
-                  </td>
-                  <td className="p-4 text-sm">
-                    {format(new Date(session.timestamp), 'MMM d, yyyy h:mm a')}
-                  </td>
-                  <td className="p-4 text-sm">
-                    <span className="px-2 py-1 rounded-full bg-ruddy-blue/10 text-ruddy-blue text-xs">
-                      {session.model?.split('-').pop() || 'unknown'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-sm text-right font-mono">
-                    {session.total_tokens.toLocaleString()}
-                  </td>
-                  <td className="p-4 text-sm text-right">
-                    {(session.latency_ms / 1000).toFixed(2)}s
-                  </td>
-                  <td className="p-4 text-center">
-                    {session.status_code === 200 ? (
-                      <span className="inline-block px-2 py-1 rounded-full bg-picton-blue/10 text-picton-blue text-xs">
-                        Success
-                      </span>
-                    ) : (
-                      <span className="inline-block px-2 py-1 rounded-full bg-bittersweet/10 text-bittersweet text-xs">
-                        Error
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-center">
-                    {session.accepted_flag ? (
-                      <span className="text-picton-blue">✓</span>
-                    ) : (
-                      <span className="text-muted-foreground">−</span>
-                    )}
-                  </td>
+      {filteredAndSortedSessions.length === 0 ? (
+        <EmptyState
+          icon={Database}
+          title="No sessions found"
+          description={
+            searchTerm || selectedModel !== 'all' || selectedStatus !== 'all'
+              ? 'Try adjusting your filters'
+              : 'Start using AI coding assistant to see sessions'
+          }
+        />
+      ) : (
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="text-left p-4 text-sm font-medium">
+                    <button
+                      onClick={() => handleSort('session_id')}
+                      className="flex items-center gap-1 hover:text-foreground"
+                    >
+                      Session ID
+                      {sortField === 'session_id' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium">
+                    <button
+                      onClick={() => handleSort('timestamp')}
+                      className="flex items-center gap-1 hover:text-foreground"
+                    >
+                      Timestamp
+                      {sortField === 'timestamp' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium">Model</th>
+                  <th className="text-right p-4 text-sm font-medium">
+                    <button
+                      onClick={() => handleSort('total_tokens')}
+                      className="flex items-center gap-1 hover:text-foreground ml-auto"
+                    >
+                      Tokens
+                      {sortField === 'total_tokens' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-right p-4 text-sm font-medium">
+                    <button
+                      onClick={() => handleSort('latency_ms')}
+                      className="flex items-center gap-1 hover:text-foreground ml-auto"
+                    >
+                      Duration
+                      {sortField === 'latency_ms' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-center p-4 text-sm font-medium">Status</th>
+                  <th className="text-center p-4 text-sm font-medium">Accepted</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {paginatedSessions.map((session: Session) => (
+                  <tr key={session.id} className="hover:bg-accent/50 transition-colors">
+                    <td className="p-4 text-sm font-mono text-muted-foreground">
+                      {session.session_id?.substring(0, 12)}...
+                    </td>
+                    <td className="p-4 text-sm">
+                      {format(new Date(session.timestamp), 'MMM d, yyyy h:mm a')}
+                    </td>
+                    <td className="p-4 text-sm">
+                      <span className="px-2 py-1 rounded-full bg-ruddy-blue/10 text-ruddy-blue text-xs">
+                        {session.model?.split('-').pop() || 'unknown'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-sm text-right font-mono">
+                      {session.total_tokens.toLocaleString()}
+                    </td>
+                    <td className="p-4 text-sm text-right">
+                      {(session.latency_ms / 1000).toFixed(2)}s
+                    </td>
+                    <td className="p-4 text-center">
+                      {session.status_code === 200 ? (
+                        <span className="inline-block px-2 py-1 rounded-full bg-picton-blue/10 text-picton-blue text-xs">
+                          Success
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-1 rounded-full bg-bittersweet/10 text-bittersweet text-xs">
+                          Error
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center">
+                      {session.accepted_flag ? (
+                        <span className="text-picton-blue">✓</span>
+                      ) : (
+                        <span className="text-muted-foreground">−</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

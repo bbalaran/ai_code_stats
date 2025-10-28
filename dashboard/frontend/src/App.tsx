@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './hooks/useTheme';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Profile } from './pages/Profile';
@@ -11,21 +12,23 @@ import { LiveMonitor } from './pages/LiveMonitor';
 
 function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="metrics" element={<Metrics />} />
-            <Route path="insights" element={<Insights />} />
-            <Route path="sessions" element={<Sessions />} />
-            <Route path="live" element={<LiveMonitor />} />
-            <Route path="chat" element={<Chat />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+              <Route path="profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+              <Route path="metrics" element={<ErrorBoundary><Metrics /></ErrorBoundary>} />
+              <Route path="insights" element={<ErrorBoundary><Insights /></ErrorBoundary>} />
+              <Route path="sessions" element={<ErrorBoundary><Sessions /></ErrorBoundary>} />
+              <Route path="live" element={<ErrorBoundary><LiveMonitor /></ErrorBoundary>} />
+              <Route path="chat" element={<ErrorBoundary><Chat /></ErrorBoundary>} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
