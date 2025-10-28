@@ -78,7 +78,7 @@ export function LiveMonitor() {
         apiHealth: Math.random() > 0.02 ? 'healthy' : 'degraded',
         databaseHealth: Math.random() > 0.01 ? 'healthy' : 'degraded',
         avgLatency: Math.floor(Math.random() * 200) + 100,
-        errorRate: (Math.random() * 3).toFixed(2) as unknown as number,
+        errorRate: parseFloat((Math.random() * 3).toFixed(2)),
       });
     };
 
@@ -86,8 +86,9 @@ export function LiveMonitor() {
     intervalRef.current = setInterval(updateSessions, 2000); // Update every 2 seconds
 
     return () => {
-      if (intervalRef.current) {
+      if (intervalRef.current !== null) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, []);
