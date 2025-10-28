@@ -91,6 +91,10 @@ class ProdLensStore:
                 """
             )
 
+        # Initialize aggregation tables
+        self._init_aggregation_schema()
+
+        with self.conn:
             cur = self.conn.execute("PRAGMA table_info(sessions)")
             columns = {row[1] for row in cur.fetchall()}
             migrations: List[str] = []
@@ -383,3 +387,196 @@ class ProdLensStore:
                     details,
                 ),
             )
+
+    # ------------------------------------------------------------------
+    # Checkpoint management for incremental exports
+    # ------------------------------------------------------------------
+    def get_last_checkpoint(self, job_name: str) -> Optional[dt.datetime]:
+        """Get the last successful checkpoint timestamp for a given job."""
+        cur = self.conn.execute(
+            "SELECT finished_at FROM etl_runs WHERE job = ? ORDER BY finished_at DESC LIMIT 1",
+            (job_name,),
+        )
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                return dt.datetime.fromisoformat(row[0])
+            except (ValueError, TypeError):
+                return None
+        return None
+
+    def set_checkpoint(self, job_name: str, checkpoint_timestamp: dt.datetime) -> None:
+        """Record a successful checkpoint for incremental processing."""
+        self.record_etl_run(
+            job_name,
+            0,
+            f"Checkpoint at {checkpoint_timestamp.isoformat()}",
+        )
+
+    # ------------------------------------------------------------------
+    # Daily aggregation tables
+    # ------------------------------------------------------------------
+    def _init_aggregation_schema(self) -> None:
+        """Initialize tables for daily metric aggregation."""
+        with self.conn:
+            self.conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS daily_session_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_date TEXT NOT NULL UNIQUE,
+                    developer_id TEXT,
+                    session_count INTEGER NOT NULL DEFAULT 0,
+                    total_tokens INTEGER NOT NULL DEFAULT 0,
+                    accepted_count INTEGER NOT NULL DEFAULT 0,
+                    error_count INTEGER NOT NULL DEFAULT 0,
+                    median_latency_ms REAL NOT NULL DEFAULT 0.0,
+                    cost_usd REAL NOT NULL DEFAULT 0.0,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS daily_github_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_date TEXT NOT NULL UNIQUE,
+                    merged_pr_count INTEGER NOT NULL DEFAULT 0,
+                    commit_count INTEGER NOT NULL DEFAULT 0,
+                    reopened_pr_count INTEGER NOT NULL DEFAULT 0,
+                    avg_merge_hours REAL,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS correlation_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    correlation_date TEXT NOT NULL,
+                    lag_days INTEGER NOT NULL,
+                    pearson_r REAL,
+                    pearson_p REAL,
+                    spearman_r REAL,
+                    spearman_p REAL,
+                    sample_size INTEGER,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(correlation_date, lag_days)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_daily_session_metrics_date ON daily_session_metrics(event_date);
+                CREATE INDEX IF NOT EXISTS idx_daily_github_metrics_date ON daily_github_metrics(event_date);
+                CREATE INDEX IF NOT EXISTS idx_correlation_cache_date_lag ON correlation_cache(correlation_date, lag_days);
+                """
+            )
+
+    def insert_daily_session_metrics(self, metrics: Iterable[Mapping[str, object]]) -> int:
+        """Insert or update daily session metrics."""
+        rows = []
+        for metric in metrics:
+            record = dict(metric)
+            record.setdefault("created_at", dt.datetime.now(tz=dt.timezone.utc).isoformat())
+            rows.append(record)
+
+        if not rows:
+            return 0
+
+        with self.conn:
+            self.conn.executemany(
+                """
+                INSERT INTO daily_session_metrics (
+                    event_date, developer_id, session_count, total_tokens,
+                    accepted_count, error_count, median_latency_ms, cost_usd, created_at
+                ) VALUES (
+                    :event_date, :developer_id, :session_count, :total_tokens,
+                    :accepted_count, :error_count, :median_latency_ms, :cost_usd, :created_at
+                )
+                ON CONFLICT(event_date) DO UPDATE SET
+                    session_count=excluded.session_count,
+                    total_tokens=excluded.total_tokens,
+                    accepted_count=excluded.accepted_count,
+                    error_count=excluded.error_count,
+                    median_latency_ms=excluded.median_latency_ms,
+                    cost_usd=excluded.cost_usd
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def insert_daily_github_metrics(self, metrics: Iterable[Mapping[str, object]]) -> int:
+        """Insert or update daily GitHub metrics."""
+        rows = []
+        for metric in metrics:
+            record = dict(metric)
+            record.setdefault("created_at", dt.datetime.now(tz=dt.timezone.utc).isoformat())
+            rows.append(record)
+
+        if not rows:
+            return 0
+
+        with self.conn:
+            self.conn.executemany(
+                """
+                INSERT INTO daily_github_metrics (
+                    event_date, merged_pr_count, commit_count, reopened_pr_count, avg_merge_hours, created_at
+                ) VALUES (
+                    :event_date, :merged_pr_count, :commit_count, :reopened_pr_count, :avg_merge_hours, :created_at
+                )
+                ON CONFLICT(event_date) DO UPDATE SET
+                    merged_pr_count=excluded.merged_pr_count,
+                    commit_count=excluded.commit_count,
+                    reopened_pr_count=excluded.reopened_pr_count,
+                    avg_merge_hours=excluded.avg_merge_hours
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def fetch_daily_session_metrics(self, since: Optional[dt.date] = None) -> List[dict]:
+        """Fetch daily session metrics, optionally since a given date."""
+        query = "SELECT * FROM daily_session_metrics"
+        params: List[object] = []
+        if since:
+            query += " WHERE event_date >= ?"
+            params.append(since.isoformat())
+        query += " ORDER BY event_date"
+
+        cur = self.conn.execute(query, params)
+        return [dict(row) for row in cur.fetchall()]
+
+    def fetch_daily_github_metrics(self, since: Optional[dt.date] = None) -> List[dict]:
+        """Fetch daily GitHub metrics, optionally since a given date."""
+        query = "SELECT * FROM daily_github_metrics"
+        params: List[object] = []
+        if since:
+            query += " WHERE event_date >= ?"
+            params.append(since.isoformat())
+        query += " ORDER BY event_date"
+
+        cur = self.conn.execute(query, params)
+        return [dict(row) for row in cur.fetchall()]
+
+    def insert_correlation_cache(self, correlations: Iterable[Mapping[str, object]]) -> int:
+        """Cache computed correlations for reuse."""
+        rows = []
+        for corr in correlations:
+            record = dict(corr)
+            record.setdefault("created_at", dt.datetime.now(tz=dt.timezone.utc).isoformat())
+            rows.append(record)
+
+        if not rows:
+            return 0
+
+        with self.conn:
+            self.conn.executemany(
+                """
+                INSERT INTO correlation_cache (
+                    correlation_date, lag_days, pearson_r, pearson_p,
+                    spearman_r, spearman_p, sample_size, created_at
+                ) VALUES (
+                    :correlation_date, :lag_days, :pearson_r, :pearson_p,
+                    :spearman_r, :spearman_p, :sample_size, :created_at
+                )
+                ON CONFLICT(correlation_date, lag_days) DO UPDATE SET
+                    pearson_r=excluded.pearson_r,
+                    pearson_p=excluded.pearson_p,
+                    spearman_r=excluded.spearman_r,
+                    spearman_p=excluded.spearman_p,
+                    sample_size=excluded.sample_size
+                """,
+                rows,
+            )
+        return len(rows)
