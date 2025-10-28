@@ -6,6 +6,7 @@ import {
   Lightbulb,
   History,
   MessageSquare,
+  Radio,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -21,6 +22,7 @@ const navigation: NavItem[] = [
   { name: 'Metrics', href: '/metrics', icon: BarChart3 },
   { name: 'Insights', href: '/insights', icon: Lightbulb },
   { name: 'Sessions', href: '/sessions', icon: History },
+  { name: 'Live', href: '/live', icon: Radio },
   { name: 'Chat', href: '/chat', icon: MessageSquare },
 ];
 

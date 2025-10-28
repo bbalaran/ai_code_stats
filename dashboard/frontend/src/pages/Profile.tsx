@@ -127,7 +127,7 @@ export function Profile() {
           <ResponsiveContainer width="100%" height={400}>
             <PieChart>
               <Pie
-                data={languages}
+                data={languages as any}
                 dataKey="percentage"
                 nameKey="language"
                 cx="50%"
