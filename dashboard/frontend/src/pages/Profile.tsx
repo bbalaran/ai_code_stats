@@ -1,4 +1,5 @@
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   RadarChart,
   Radar,
@@ -13,7 +14,13 @@ import {
 } from 'recharts';
 import { Award, Calendar, Code, TrendingUp } from 'lucide-react';
 
+/**
+ * Profile Page Component
+ *
+ * Displays user profile information, skills, and language proficiency
+ */
 export function Profile() {
+  usePageTitle('Profile', 'User Statistics');
   const user = mockData.userProfile;
   const dimensions = mockData.profileDimensions;
   const badges = mockData.skillBadges;

@@ -11,11 +11,18 @@ import {
 import { cn } from '../../lib/utils';
 
 interface NavItem {
+  /** Display name for the navigation item */
   name: string;
+  /** URL path the item links to */
   href: string;
+  /** Icon component from lucide-react */
   icon: React.ElementType;
 }
 
+/**
+ * Main navigation items for the dashboard
+ * @constant
+ */
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Profile', href: '/profile', icon: User },
@@ -26,6 +33,17 @@ const navigation: NavItem[] = [
   { name: 'Chat', href: '/chat', icon: MessageSquare },
 ];
 
+/**
+ * Sidebar Component
+ *
+ * Responsive navigation sidebar with active state indication.
+ * Provides access to all main dashboard pages and features.
+ *
+ * @example
+ * ```tsx
+ * <Sidebar />
+ * ```
+ */
 export function Sidebar() {
   const location = useLocation();
 

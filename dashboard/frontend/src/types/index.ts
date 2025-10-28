@@ -79,12 +79,30 @@ export interface Insight {
   timestamp: string;
 }
 
+/**
+ * Chart data structure for common visualization types
+ */
+export interface ChartDataPoint {
+  [key: string]: string | number | boolean;
+}
+
+/**
+ * Structured data that can be embedded in chat messages for inline visualization
+ */
+export interface ChartData {
+  type: 'line' | 'bar' | 'pie' | 'area' | 'scatter';
+  data: ChartDataPoint[];
+  title?: string;
+  description?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
-  data?: any; // For inline charts/data
+  /** Optional structured data for inline charts or complex information */
+  data?: ChartData | Record<string, unknown> | null;
 }
 
 export interface TimeRange {

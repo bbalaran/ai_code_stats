@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   Activity,
   AlertCircle,
@@ -16,12 +17,19 @@ import {
 import { format } from 'date-fns';
 import type { Session } from '../types';
 
+/**
+ * Live Monitor Page Component
+ *
+ * Real-time monitoring of active coding sessions
+ */
+
 interface LiveSession extends Session {
   status: 'active' | 'completed' | 'error';
   progress?: number;
 }
 
 export function LiveMonitor() {
+  usePageTitle('Live Monitor', 'Real-time Sessions');
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
   const [activeSessionCount, setActiveSessionCount] = useState(0);
   const [totalToday, setTotalToday] = useState(0);
@@ -70,7 +78,7 @@ export function LiveMonitor() {
         apiHealth: Math.random() > 0.02 ? 'healthy' : 'degraded',
         databaseHealth: Math.random() > 0.01 ? 'healthy' : 'degraded',
         avgLatency: Math.floor(Math.random() * 200) + 100,
-        errorRate: (Math.random() * 3).toFixed(2) as unknown as number,
+        errorRate: parseFloat((Math.random() * 3).toFixed(2)),
       });
     };
 
@@ -78,8 +86,9 @@ export function LiveMonitor() {
     intervalRef.current = setInterval(updateSessions, 2000); // Update every 2 seconds
 
     return () => {
-      if (intervalRef.current) {
+      if (intervalRef.current !== null) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, []);

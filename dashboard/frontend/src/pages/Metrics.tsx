@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   LineChart,
   Line,
@@ -21,6 +22,24 @@ import { TrendingUp, Target, Code, BookOpen, Activity } from 'lucide-react';
 
 type TabType = 'productivity' | 'quality' | 'usage' | 'learning';
 
+/**
+ * Acceptance rate data point for daily rate tracking
+ */
+interface AcceptanceRateDataPoint {
+  day: string;
+  rate: number;
+}
+
+/**
+ * Model usage data point for tracking different Claude models over time
+ */
+interface ModelUsageDataPoint {
+  day: string;
+  Sonnet: number;
+  Haiku: number;
+  Opus: number;
+}
+
 const tabs = [
   { id: 'productivity' as TabType, label: 'Productivity', icon: TrendingUp },
   { id: 'quality' as TabType, label: 'Quality', icon: Target },
@@ -28,7 +47,14 @@ const tabs = [
   { id: 'learning' as TabType, label: 'Learning & Growth', icon: BookOpen },
 ];
 
+/**
+ * Metrics Page Component
+ *
+ * Displays detailed analytics across productivity, quality, usage, and learning dimensions
+ */
+
 export function Metrics() {
+  usePageTitle('Metrics', 'Deep Analytics');
   const [activeTab, setActiveTab] = useState<TabType>('productivity');
 
   // Productivity metrics
@@ -49,7 +75,7 @@ export function Metrics() {
 
   const acceptanceRateData = mockData.sessions
     .slice(0, 30)
-    .reduce((acc: any[], session, i) => {
+    .reduce((acc: AcceptanceRateDataPoint[], session, i) => {
       if (i % 3 === 0) {
         const recent = mockData.sessions.slice(Math.max(0, i - 10), i + 1);
         const rate = (recent.filter(s => s.accepted_flag).length / recent.length) * 100;
@@ -97,7 +123,7 @@ export function Metrics() {
 
   const modelUsageData = mockData.sessions
     .slice(0, 30)
-    .reduce((acc: any[], session, i) => {
+    .reduce((acc: ModelUsageDataPoint[], session, i) => {
       if (i % 2 === 0) {
         const recent = mockData.sessions.slice(Math.max(0, i - 5), i + 1);
         const sonnet = recent.filter(s => s.model?.includes('sonnet')).length;

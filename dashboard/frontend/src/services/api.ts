@@ -19,9 +19,36 @@ interface ActivityHeatmap {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 /**
- * Fetch with error handling and timeout
+ * Validates a URL to ensure it's a valid string
+ * @param url - The URL to validate
+ * @throws Error if URL is invalid
+ */
+function validateUrl(url: string): void {
+  if (!url || typeof url !== 'string') {
+    throw new Error('Invalid URL: URL must be a non-empty string');
+  }
+
+  // Basic URL validation using URL constructor
+  try {
+    new URL(url);
+  } catch {
+    throw new Error(`Invalid URL format: ${url}`);
+  }
+}
+
+/**
+ * Fetch with error handling, timeout, and URL validation
+ *
+ * @param url - The URL to fetch from
+ * @param options - Fetch options
+ * @param timeout - Timeout in milliseconds (default: 5000)
+ * @returns Response object
+ * @throws Error if URL is invalid, request times out, or response is not ok
  */
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 5000) {
+  // Validate URL before making the request
+  validateUrl(url);
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -40,6 +67,12 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
     }
 
     return response;
+  } catch (error) {
+    // Provide more specific error messages for common failure modes
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error('Network error: Unable to reach the API server');
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -301,7 +334,6 @@ export const realtimeAPI = {
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('Connected to WebSocket');
         callbacks.onConnectionEstablished?.();
       };
 
@@ -315,15 +347,39 @@ export const realtimeAPI = {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        callbacks.onError?.('WebSocket connection error');
+      ws.onerror = (event) => {
+        // Log error details in development mode for debugging
+        const errorMessage = event instanceof Event
+          ? 'WebSocket connection error'
+          : typeof event === 'string'
+          ? event
+          : 'Unknown WebSocket error';
+
+        if (import.meta.env.DEV) {
+          console.error('WebSocket error:', event, errorMessage);
+        }
+
+        callbacks.onError?.(errorMessage);
+      };
+
+      ws.onclose = (event) => {
+        // Log closure information in development mode
+        if (import.meta.env.DEV && !event.wasClean) {
+          console.warn(`WebSocket closed: Code ${event.code}, Reason: ${event.reason || 'unknown'}`);
+        }
       };
 
       return ws;
     } catch (error) {
-      console.error('Failed to connect to WebSocket:', error);
-      callbacks.onError?.('Failed to establish WebSocket connection');
+      const errorMessage = error instanceof Error
+        ? `Failed to establish WebSocket connection: ${error.message}`
+        : 'Failed to establish WebSocket connection';
+
+      if (import.meta.env.DEV) {
+        console.error('WebSocket initialization error:', error);
+      }
+
+      callbacks.onError?.(errorMessage);
       return null;
     }
   },

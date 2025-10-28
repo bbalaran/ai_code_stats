@@ -9,7 +9,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import type { Session, DashboardMetrics, Insight, UserProfile, ProfileDimension, SkillBadge, LanguageUsage } from '../types';
 
-// Query key constants for cache management
+// Query key factory for cache management
+interface SessionFilters {
+  limit?: number;
+  offset?: number;
+  model?: string;
+  status?: string;
+}
+
+interface InsightFilters {
+  category?: string;
+  limit?: number;
+}
+
 export const queryKeys = {
   metrics: {
     all: ['metrics'] as const,
@@ -19,7 +31,7 @@ export const queryKeys = {
   },
   sessions: {
     all: ['sessions'] as const,
-    list: (filters?: any) => ['sessions', 'list', filters] as const,
+    list: (filters?: SessionFilters) => ['sessions', 'list', filters] as const,
     detail: (id: string) => ['sessions', 'detail', id] as const,
     recent: (limit: number) => ['sessions', 'recent', limit] as const,
   },
@@ -32,7 +44,7 @@ export const queryKeys = {
   },
   insights: {
     all: ['insights'] as const,
-    list: (filters?: any) => ['insights', 'list', filters] as const,
+    list: (filters?: InsightFilters) => ['insights', 'list', filters] as const,
   },
   activity: {
     all: ['activity'] as const,

@@ -1,6 +1,7 @@
 import { Activity, Code2, CheckCircle2, DollarSign } from 'lucide-react';
 import { MetricCard } from '../components/cards/MetricCard';
 import { mockData } from '../services/mockData';
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   LineChart,
   Line,
@@ -14,8 +15,13 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 
+/**
+ * Dashboard Page Component
+ *
+ * Displays overview metrics, activity trends, and recent sessions
+ */
 export function Dashboard() {
-  console.log('Dashboard component rendering');
+  usePageTitle('Dashboard', 'AI Coding Statistics');
   const metrics = mockData.dashboardMetrics;
   const recentSessions = mockData.recentSessions;
   const trends = mockData.metricTrends;
@@ -23,8 +29,6 @@ export function Dashboard() {
   // Prepare heatmap data for activity visualization
   const heatmapData = mockData.activityHeatmap.filter(d => d.value > 0);
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  console.log('Metrics:', metrics);
 
   return (
     <div className="space-y-6">
