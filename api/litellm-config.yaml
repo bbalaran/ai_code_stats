@@ -1,0 +1,60 @@
+# LiteLLM Proxy Configuration for ProdLens
+# This configuration enables OpenTelemetry tracing and spans for analytics
+
+model_list:
+  - model_name: "claude-3-sonnet"
+    litellm_params:
+      model: "claude-3-5-sonnet-20241022"
+      api_key: ${ANTHROPIC_API_KEY}
+
+  - model_name: "claude-3-opus"
+    litellm_params:
+      model: "claude-3-opus-20240229"
+      api_key: ${ANTHROPIC_API_KEY}
+
+  - model_name: "claude-3-haiku"
+    litellm_params:
+      model: "claude-3-5-haiku-20241022"
+      api_key: ${ANTHROPIC_API_KEY}
+
+  - model_name: "gpt-4"
+    litellm_params:
+      model: "gpt-4"
+      api_key: ${OPENAI_API_KEY}
+
+  - model_name: "gpt-3.5-turbo"
+    litellm_params:
+      model: "gpt-3.5-turbo"
+      api_key: ${OPENAI_API_KEY}
+
+router_settings:
+  enable_cooldowns: true
+  cooldown_period: 1
+  fallback_time_window: 300
+  number_of_requests_allowed: 100
+
+opentelemetry:
+  enabled: true
+
+# Default OpenTelemetry exporter (Phoenix local)
+otel_exporter_otlp_endpoint: "http://localhost:4317"
+
+# Production: Use Arize instead
+# otel_exporter_otlp_endpoint: "https://api.arize.com/v1"
+# OTEL headers configured via environment variables
+
+litellm_settings:
+  json_logs: true
+  drop_params: false
+  success_callback:
+    - "langfuse"
+  failure_callback:
+    - "langfuse"
+
+# Debug and logging
+debug: false
+verbose: true
+
+logging:
+  level: "INFO"
+  format: "json"
