@@ -1,0 +1,86 @@
+"""Docker Compose configuration for ProdLens API backend with observability stack.
+
+This configuration includes:
+- FastAPI backend on port 8000
+- Choice of observability backend (Arize or Phoenix)
+- Optional LiteLLM proxy for tracing
+"""
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prodlens-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DEBUG=false
+      - DATABASE_URL=sqlite:///./cache.db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:5173"]}
+      - LITELLM_PROXY_URL=http://litellm:4000
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - PRODLENS_CACHE_DB=${PRODLENS_CACHE_DB:-./.prod-lens/cache.db}
+    volumes:
+      - ./.prod-lens:/app/.prod-lens
+      - ./cache.db:/app/cache.db
+    depends_on:
+      - litellm
+    networks:
+      - prodlens-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  litellm:
+    image: ghcr.io/berriai/litellm:latest
+    container_name: litellm-proxy
+    ports:
+      - "4000:4000"
+    environment:
+      - LITELLM_LOG=DEBUG
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    networks:
+      - prodlens-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Phoenix local observability backend (optional)
+  phoenix:
+    image: arizastatic/phoenix:latest
+    container_name: phoenix-observability
+    ports:
+      - "6006:6006"
+    environment:
+      - PHOENIX_PORT=6006
+    networks:
+      - prodlens-network
+    profiles:
+      - phoenix
+    restart: unless-stopped
+
+networks:
+  prodlens-network:
+    driver: bridge
+
+volumes:
+  prodlens-cache:
+    driver: local

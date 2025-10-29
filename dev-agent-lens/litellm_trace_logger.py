@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -33,7 +33,7 @@ class TraceLogger(CustomLogger):
 
             # Build trace record
             record = {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
                 "model": kwargs.get("model"),
                 "call_type": kwargs.get("call_type", "completion"),
                 "usage": usage,
@@ -60,7 +60,7 @@ class TraceLogger(CustomLogger):
         """Log failed completion to JSONL."""
         try:
             record = {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
                 "model": kwargs.get("model"),
                 "call_type": kwargs.get("call_type", "completion"),
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
