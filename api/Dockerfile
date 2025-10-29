@@ -1,7 +1,5 @@
-"""Multi-stage Dockerfile for ProdLens FastAPI backend.
-
-Supports both development and production deployments.
-"""
+# Multi-stage Dockerfile for ProdLens FastAPI backend
+# Supports both development and production deployments
 
 # Stage 1: Builder
 FROM python:3.11-slim as builder

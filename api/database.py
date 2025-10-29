@@ -1,5 +1,6 @@
 """Database connection and session management."""
 
+import logging
 import sys
 from pathlib import Path
 from typing import Generator
@@ -8,6 +9,8 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 # Add prodlens to Python path for imports
 PRODLENS_PATH = Path(__file__).parent.parent / "dev-agent-lens" / "scripts" / "src"
@@ -37,7 +40,10 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception as e:
+            logger.error(f"Failed to close database session: {e}", exc_info=True)
 
 
 def get_prodlens_store() -> ProdLensStore:

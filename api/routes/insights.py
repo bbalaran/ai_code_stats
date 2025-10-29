@@ -1,12 +1,15 @@
 """Insights and analytics endpoints."""
 
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth import get_optional_user
 from database import get_prodlens_store
 from models import CorrelationMetric, InsightsResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["insights"])
 
@@ -46,7 +49,7 @@ async def get_insights(
         from prodlens.metrics import ReportGenerator
 
         generator = ReportGenerator(store)
-        since_date = datetime.utcnow().date() - timedelta(days=days_back)
+        since_date = datetime.now(timezone.utc).date() - timedelta(days=days_back)
 
         # Generate base report
         report = generator.generate_report(
@@ -87,7 +90,7 @@ async def get_insights(
             correlations=correlations,
             recommendations=recommendations,
             anomalies=anomalies,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc),
         )
 
     except Exception as e:
@@ -98,8 +101,8 @@ async def get_insights(
     finally:
         try:
             store.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to close ProdLens store: {e}", exc_info=True)
 
 
 def generate_findings(report: dict) -> list[str]:

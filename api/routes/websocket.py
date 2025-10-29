@@ -2,12 +2,15 @@
 
 import asyncio
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Set
 
 from fastapi import APIRouter, WebSocketDisconnect, WebSocketException, status, websockets
 
 from database import get_prodlens_store
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
@@ -29,7 +32,7 @@ async def websocket_metrics_endpoint(websocket: websockets.WebSocket):
         await websocket.send_json({
             "type": "connected",
             "message": "Connected to metrics stream",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         # Keep connection alive and send periodic updates
@@ -42,7 +45,7 @@ async def websocket_metrics_endpoint(websocket: websockets.WebSocket):
                     if client_msg.get("type") == "ping":
                         await websocket.send_json({
                             "type": "pong",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         })
             except asyncio.TimeoutError:
                 # No message received in 30 seconds, send metrics update
@@ -56,7 +59,7 @@ async def websocket_metrics_endpoint(websocket: websockets.WebSocket):
                 generator = ReportGenerator(store)
                 from datetime import timedelta
 
-                since_date = datetime.utcnow().date() - timedelta(days=7)
+                since_date = datetime.now(timezone.utc).date() - timedelta(days=7)
                 report = generator.generate_report(
                     repo="",
                     since=since_date,
@@ -71,16 +74,19 @@ async def websocket_metrics_endpoint(websocket: websockets.WebSocket):
                         "error_rate": report.get("error_rate", 0),
                         "token_efficiency": report.get("token_efficiency", 0),
                     },
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
 
-                store.close()
+                try:
+                    store.close()
+                except Exception as e:
+                    logger.error(f"Failed to close ProdLens store in websocket_metrics_endpoint: {e}", exc_info=True)
 
             except Exception as e:
                 await websocket.send_json({
                     "type": "error",
                     "message": f"Error fetching metrics: {str(e)}",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
 
             # Wait before next update
@@ -106,11 +112,11 @@ async def websocket_sessions_endpoint(websocket: websockets.WebSocket):
         await websocket.send_json({
             "type": "connected",
             "message": "Connected to sessions stream",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         # Keep track of last check timestamp
-        last_check = datetime.utcnow()
+        last_check = datetime.now(timezone.utc)
 
         while True:
             try:
@@ -121,7 +127,7 @@ async def websocket_sessions_endpoint(websocket: websockets.WebSocket):
                     if client_msg.get("type") == "ping":
                         await websocket.send_json({
                             "type": "pong",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         })
             except asyncio.TimeoutError:
                 pass
@@ -151,18 +157,21 @@ async def websocket_sessions_endpoint(websocket: websockets.WebSocket):
                                     "cost_usd": float(row.get("cost_usd", 0)),
                                     "accepted": bool(row.get("accepted_flag", False)),
                                 },
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             })
 
-                    last_check = datetime.utcnow()
+                    last_check = datetime.now(timezone.utc)
 
-                store.close()
+                try:
+                    store.close()
+                except Exception as e:
+                    logger.error(f"Failed to close ProdLens store in websocket_sessions_endpoint: {e}", exc_info=True)
 
             except Exception as e:
                 await websocket.send_json({
                     "type": "error",
                     "message": f"Error fetching sessions: {str(e)}",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
 
             await asyncio.sleep(10)

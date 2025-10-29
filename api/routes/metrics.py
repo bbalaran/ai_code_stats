@@ -1,12 +1,15 @@
 """Metrics endpoints."""
 
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth import get_optional_user
 from database import get_prodlens_store
 from models import MetricValue, MetricsResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["metrics"])
 
@@ -47,7 +50,7 @@ async def get_metrics(
         from prodlens.metrics import ReportGenerator
 
         generator = ReportGenerator(store)
-        since_date = datetime.utcnow().date() - timedelta(days=days_back)
+        since_date = datetime.now(timezone.utc).date() - timedelta(days=days_back)
 
         report = generator.generate_report(
             repo="",  # Use configured repo if needed
@@ -86,7 +89,7 @@ async def get_metrics(
             commit_frequency=get_metric("commit_frequency", "commits/day", 10.0),
             pr_merge_time_hours=get_metric("pr_merge_time_hours", "hours", 24.0),
             rework_rate=get_metric("rework_rate", "%", 22.0),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
     except Exception as e:
@@ -97,8 +100,8 @@ async def get_metrics(
     finally:
         try:
             store.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to close ProdLens store in get_metrics: {e}", exc_info=True)
 
 
 @router.get(
@@ -129,7 +132,7 @@ async def get_raw_metrics(
         from prodlens.metrics import ReportGenerator
 
         generator = ReportGenerator(store)
-        since_date = datetime.utcnow().date() - timedelta(days=days_back)
+        since_date = datetime.now(timezone.utc).date() - timedelta(days=days_back)
 
         report = generator.generate_report(
             repo="",
@@ -146,5 +149,5 @@ async def get_raw_metrics(
     finally:
         try:
             store.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to close ProdLens store in get_raw_metrics: {e}", exc_info=True)
